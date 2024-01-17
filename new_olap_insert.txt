@@ -1,0 +1,231 @@
+
+FileName : fnDataModelCreationJournal 
+=============================Dim and Facts Creation ==========================
+create table DMA.DimEmployee(
+Pk_EmployeeId int identity(1,1) Primary key,
+EmployeeFirstName nvarchar(max),
+EmployeeLastName nvarchar(max),
+EmployeeEmail nvarchar(max),
+CreatedDate datetime DEFAULT getDate()
+);
+
+
+create table DMA.DimDate(
+Pk_DateKey int  Primary key,
+Date date,
+DayofWeek nvarchar(max),
+DayofMonth nvarchar(max),
+MonthName nvarchar(max),
+Quatr nvarchar(max),
+Year int,
+CreatedDate datetime DEFAULT getDate()
+);
+
+create table DMA.DimClient(
+Pk_ClientId int identity(1,1) primary key,
+ClientName nvarchar(max),
+CreatedDate datetime DEFAULT getDate()
+
+);
+
+create table DMA.DimProject(
+Pk_ProjectId int identity(1,1) Primary key,
+ProjectName nvarchar(max),
+Fk_ClientId int,
+CreatedDate datetime DEFAULT getDate(),
+FOREIGN KEY (Fk_ClientId) REFERENCES DMA.DimClient(Pk_ClientId),
+);
+
+create table DMA.DimRag(
+Pk_ServiceId int identity(1,1) primary key ,
+RagName nvarchar(max),
+Description nvarchar(max),
+CreatedDate datetime DEFAULT getDate()
+);
+
+create table DMA.FactReports(
+Pk_Id int identity(1,1) Primary key,
+Updates nvarchar(max),
+SubmittedTime datetime,
+Fk_ProjectId int,
+Fk_EmployeesId int,
+Fk_ViewersID int,
+Fk_DateKey int,
+Fk_ServiceKey int,
+CreatedDate datetime DEFAULT getDate(),
+FOREIGN KEY (Fk_EmployeesId) REFERENCES DMA.DimEmployee(Pk_EmployeeId),
+FOREIGN KEY (Fk_ViewersID) REFERENCES DMA.DimEmployee(Pk_EmployeeId),
+FOREIGN KEY (Fk_DateKey) REFERENCES DMA.DimDate(Pk_DateKey),
+FOREIGN KEY (Fk_ProjectId) REFERENCES DMA.DimProject(Pk_ProjectId),
+FOREIGN KEY (Fk_ServiceKey) REFERENCES DMA.DimRag(Pk_ServiceId)
+);
+=================================Stage Table ================================
+create table DMA.StgReports(
+Id int identity(1,1) Primary key,
+Title nvarchar(max),
+Updates nvarchar(max),
+SubmittedTime datetime,
+EmployeeEmail nvarchar(max),
+ViewEmail nvarchar(max)
+);
+
+
+=======================================Insertion Stg to Dim  =============================
+DateDim
+WITH t AS (
+    SELECT 1 AS sr_no
+    UNION ALL
+    SELECT sr_no + 1 FROM t WHERE sr_no < 122
+),
+t1 AS (
+    SELECT DATEADD(DAY, sr_no - 49, GETDATE()) AS a FROM t
+)
+INSERT INTO DMA.DimDate (DateKey, Date, DayOfWeek, DayOfMonth, MonthName, Quatr, Year)
+SELECT REPLACE(CONVERT(DATE, a), '-', '') AS DateKey, CONVERT(DATE, a) AS Date, DATENAME(WEEKDAY, a) AS DayOfWeek, 
+       DAY(a) AS DayOfMonth, DATENAME(MONTH, a) AS MonthName, 'Q' + CAST(DATEPART(QUARTER, a) AS NVARCHAR(MAX)) AS Quatr,
+       YEAR(a) AS Year
+FROM t1
+where not exists(
+select 1 from DMA.DimDate
+where DateKey = replace(convert(date, a), '-', '')
+)
+ORDER BY Date desc
+OPTION (MAXRECURSION 0);
+
+
+=============================================================DimEmployees==============================
+WITH DataEmployees AS (
+    SELECT
+        Id,
+        EmployeeEmail ,
+		ViewEmail,
+        ROW_NUMBER() OVER (PARTITION BY  EmployeeEmail,ViewEmail ORDER BY Id) AS rn
+    FROM DMA.StgReports
+)
+INSERT INTO DMA.DimEmployees(EmployeeFirstName, EmployeeLastName, EmployeeEmail)
+SELECT Distinct
+    PARSENAME(s.EmployeeEmail, 3),
+    REPLACE(PARSENAME(REPLACE(s.EmployeeEmail, '@', '.'), 3), '.', ''),
+    s.EmployeeEmail
+FROM
+    DataEmployees s
+
+WHERE
+    s.rn = 1 AND NOT EXISTS (
+        SELECT 1
+        FROM DMA.DimEmployees t
+        WHERE t.EmployeeEmail = s.EmployeeEmail
+);
+
+WITH UniqueViewEmails AS (
+    SELECT DISTINCT ViewEmail
+    FROM DMA.StgReports
+)
+
+INSERT INTO DMA.DimEmployees (EmployeeFirstName, EmployeeLastName, EmployeeEmail)
+SELECT
+    PARSENAME(s.ViewEmail, 3) AS EmployeeFirstName,
+    REPLACE(PARSENAME(REPLACE(s.ViewEmail, '@', '.'), 3), '.', '') AS EmployeeLastName,
+    s.ViewEmail AS EmployeeEmail
+FROM
+    UniqueViewEmails s
+WHERE
+    NOT EXISTS (
+        SELECT 1
+        FROM DMA.DimEmployees t
+        WHERE t.EmployeeEmail = s.ViewEmail
+);
+
+update DMA.DimEmployees
+set EmployeeFirstName = concat(upper(substring(EmployeeFirstName,1,1)), lower(substring(EmployeeFirstName,2, len(EmployeeFirstName)))),
+
+	EmployeeLastName = concat(upper(substring(EmployeeLastName,1,1)), lower(substring(EmployeeLastName,2, len(EmployeeLastName))));
+
+
+=======================================================DimProject==========================================================
+Insert into DMA.DimProject (ProjectName)
+select Distinct 
+Replace(SUBSTRING(Updates, 1, CHARINDEX('Update', Updates) - 1),'Service', '') AS ServiceValue
+from DMA.StgReports
+where Updates like 'Service%' and not exists 
+(select * from DMA.DimProject where ProjectName = Replace(SUBSTRING(Updates, 1, CHARINDEX('Update', Updates) - 1),'Service', '')
+);
+
+====================================================DimServices=================================================================
+Insert into DMA.DimService(RagName)
+select Distinct
+SUBSTRING(Updates, CHARINDEX('Service Health RAG', Updates) + LEN('Service Health RAG') + 1, LEN(Updates)) AS ServiceValue
+from DMA.StgReports
+where Updates like 'Service%'And CHARINDEX('Service Health RAG', Updates) > 0 AND NOT EXISTS (
+  SELECT * FROM DMA.DimService
+  WHERE RagName = SUBSTRING(Updates, CHARINDEX('Service Health RAG', Updates) + LEN('Service Health RAG') + 1, LEN(Updates))
+)
+
+===========================================================FactReports==========================================================
+INSERT INTO DMA.FactReports (Updates, SubmittedTime, DDateKey, DProjectId, DEmployeesId, ViewersID, DServiceKey)
+SELECT DISTINCT
+    REPLACE(REPLACE(REPLACE(REPLACE(
+        SUBSTRING(Updates, CHARINDEX('Update', Updates) + LEN('Update') + 1,
+            CHARINDEX('Service Health RAG', Updates) - CHARINDEX('Update', Updates) - LEN('Update') - 1
+        ), '<div>', ''), '</div>', ''), '<br>', ''), '&nbsp;', '') AS ServiceValue,
+    stg.SubmittedTime,
+    dd.DateKey,
+    dp.Id AS DProjectId,
+    de.EmployeeId AS DEmployeesId,
+    dv.EmployeeId AS ViewersID,
+    ds.ServiceId AS DServiceKey
+FROM
+    DMA.StgReports stg
+JOIN DMA.DimDate dd ON convert(date, stg.SubmittedTime) = dd.Date
+JOIN DMA.DimProject dp ON REPLACE(SUBSTRING(stg.Updates, 1, CHARINDEX('Update', stg.Updates) - 1), 'Service', '') = dp.ProjectName
+JOIN DMA.DimEmployees de ON stg.EmployeeEmail = de.EmployeeEmail 
+JOIN DMA.DimEmployees dv ON stg.ViewEmail = dv.EmployeeEmail 
+JOIN DMA.DimService ds ON SUBSTRING(stg.Updates, CHARINDEX('Service Health RAG', stg.Updates) + LEN('Service Health RAG') + 1, LEN(stg.Updates)) = ds.RagName 
+WHERE
+    stg.Updates LIKE 'Service%' and NOT EXISTS (select 1 from DMA.FactReports tf where tf.Updates = REPLACE(REPLACE(REPLACE(REPLACE(
+        SUBSTRING(stg.Updates,
+            CHARINDEX('Update', stg.Updates) + LEN('Update') + 1,
+            CHARINDEX('Service Health RAG', stg.Updates) - CHARINDEX('Update', stg.Updates) - LEN('Update') - 1
+        ), '<div>', ''), '</div>', ''), '<br>', ''), '&nbsp;', '')
+    AND tf.SubmittedTime = stg.SubmittedTime);
+
+=============================================================================== or ==========================================================================
+INSERT INTO #tempF (Updates, SubmittedTime, Fk_DateKey, Fk_ProjectId, Fk_EmployeesId, Fk_ViewersID, Fk_ServiceKey)
+SELECT Distinct  Replace (Replace (Replace(Replace(Replace(Replace(REPLACE(REPLACE(REPLACE(REPLACE(
+    SUBSTRING(
+        stg.Updates,
+        CHARINDEX('Update', stg.Updates) + LEN('Update') + 1,
+        CASE
+            WHEN CHARINDEX('Service Health RAG', stg.Updates) > 0
+            THEN CHARINDEX('Service Health RAG', stg.Updates) - CHARINDEX('Update', stg.Updates) - LEN('Update') - 1
+            ELSE LEN(stg.Updates)
+        END
+    ), '<div>', ''), '</div>', ''), '<br>', ''), '&nbsp;', ''), '<ul>', ' '), '</li>', ''), '</ul>',''),'<li style="list-style-type: disc">', ' '),'<ul style="list-style-type: circle">', ' ' ), '<li style="">', ' ')
+ AS ServiceValue,
+    stg.SubmittedTime,
+    dd.Pk_DateKey as Fk_DateKey,
+    dp.Pk_ProjectId AS Fk_ProjectId,
+    de.Pk_EmployeeId AS Fk_EmployeesId,
+    dv.Pk_EmployeeId AS Fk_ViewersID,
+    ds.Pk_ServiceId AS Fk_ServiceKey
+FROM
+    #temp stg
+JOIN DMA.DimDate dd ON convert(date, stg.SubmittedTime) = dd.Date
+JOIN DMA.DimProject dp ON REPLACE(SUBSTRING(stg.Updates, 1, CHARINDEX('Update', stg.Updates) - 1), 'Service', '') = dp.ProjectName
+JOIN DMA.DimEmployee de ON stg.EmployeeEmail = de.EmployeeEmail 
+JOIN DMA.DimEmployee dv ON stg.ViewEmail = dv.EmployeeEmail 
+JOIN DMA.DimRag ds ON SUBSTRING(stg.Updates, CHARINDEX('Service Health RAG', stg.Updates) + LEN('Service Health RAG') + 1, LEN(stg.Updates)) = ds.RagName 
+WHERE
+    stg.Updates LIKE 'Service%' and NOT EXISTS (select 1 from #tempF tf where tf.Updates =  Replace (Replace (Replace(Replace(Replace(Replace(REPLACE(REPLACE(REPLACE(REPLACE(
+    SUBSTRING(
+        stg.Updates,
+        CHARINDEX('Update', stg.Updates) + LEN('Update') + 1,
+        CASE
+            WHEN CHARINDEX('Service Health RAG', stg.Updates) > 0
+            THEN CHARINDEX('Service Health RAG', stg.Updates) - CHARINDEX('Update', stg.Updates) - LEN('Update') - 1
+            ELSE LEN(stg.Updates)
+        END
+    ), '<div>', ''), '</div>', ''), '<br>', ''), '&nbsp;', ''), '<ul>', ' '), '</li>', ''), '</ul>',''),'<li style="list-style-type: disc">', ' '),'<ul style="list-style-type: circle">', ' ' ), '<li style="">', ' ')
+
+    AND tf.SubmittedTime = stg.SubmittedTime) order by SubmittedTime desc;
+

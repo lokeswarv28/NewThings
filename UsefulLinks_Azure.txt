@@ -1,0 +1,54 @@
+Azure Portal – https://portal.azure.com
+
+
+
+Synapse Web Poral - https://web.azuresynapse.net
+
+
+
+NYC Trip Record Data - https://www1.nyc.gov/site/tlc/about/tlc-trip-record-data.page
+
+
+
+Azure Data Studio Download - https://docs.microsoft.com/en-us/sql/azure-data-studio/download-azure-data-studio?view=sql-server-ver15
+
+
+
+Power BI Desktop Download – https://powerbi.microsoft.com/en-us/desktop/
+
+
+
+Power BI Workspace - https://powerbi.microsoft.com/en-gb/
+
+
+
+POLARIS White Paper - https://www.vldb.org/pvldb/vol13/p3204-saborit.pdf
+
+
+
+OPENROWSET Function - https://docs.microsoft.com/en-us/azure/synapse-analytics/sql/develop-openrowset
+
+
+
+CSV Parser Versions - https://docs.microsoft.com/en-us/azure/synapse-analytics/sql/develop-openrowset
+
+
+
+T-SQL Data Types - https://docs.microsoft.com/en-us/sql/t-sql/data-types/int-bigint-smallint-and-tinyint-transact-sql?view=sql-server-ver15
+
+
+
+COUNT Function - https://docs.microsoft.com/en-us/sql/t-sql/functions/count-transact-sql?view=azure-sqldw-latest
+
+
+
+External Tables - https://docs.microsoft.com/en-us/azure/synapse-analytics/sql/develop-tables-external-tables?tabs=hadoop
+
+
+
+CETAS Statement - https://docs.microsoft.com/en-us/azure/synapse-analytics/sql/develop-tables-cetas
+
+
+
+COPY Command - https://docs.microsoft.com/en-us/azure/synapse-analytics/sql-data-warehouse/quickstart-bulk-load-copy-tsql?context=%2Fazure%2Fsynapse-analytics%2Fcontext%2Fcontext
+

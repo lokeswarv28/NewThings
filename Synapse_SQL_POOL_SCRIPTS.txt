@@ -1,0 +1,598 @@
+========================== Query Parquet Files ====================================
+
+/* Covid-19 ECDC cases opendata set */
+
+/* Read parquet file */
+SELECT TOP 10 *
+FROM OPENROWSET(
+    BULK 'https://pandemicdatalake.blob.core.windows.net/public/curated/covid-19/ecdc_cases/latest/ecdc_cases.parquet',
+    FORMAT = 'parquet') as rows
+
+
+/* Explicitly specify schema */
+SELECT TOP 10 *
+FROM OPENROWSET(
+        BULK 'https://pandemicdatalake.blob.core.windows.net/public/curated/covid-19/ecdc_cases/latest/ecdc_cases.parquet',
+        FORMAT = 'parquet'
+    ) WITH ( date_rep date, cases int, geo_id varchar(6) ) as rows
+
+
+/* New York City Taxi opendata set */
+
+/* Query set of parquet files */
+SELECT
+    YEAR(tpepPickupDateTime),
+    passengerCount,
+    COUNT(*) AS cnt
+FROM
+    OPENROWSET(
+        BULK 'https://azureopendatastorage.blob.core.windows.net/nyctlc/yellow/puYear=2018/puMonth=*/*.snappy.parquet',
+        FORMAT='PARQUET'
+    ) WITH (
+        tpepPickupDateTime DATETIME2,
+        passengerCount INT
+    ) AS nyc
+GROUP BY
+    passengerCount,
+    YEAR(tpepPickupDateTime)
+ORDER BY
+    YEAR(tpepPickupDateTime),
+    passengerCount;
+
+
+/* Automatic schema inference */
+SELECT TOP 10 *
+FROM
+    OPENROWSET(
+        BULK 'https://azureopendatastorage.blob.core.windows.net/nyctlc/yellow/puYear=2018/puMonth=*/*.snappy.parquet',
+        FORMAT='PARQUET'
+    ) AS nyc
+
+
+/* Query partitioned data */
+SELECT
+    YEAR(tpepPickupDateTime),
+    passengerCount,
+    COUNT(*) AS cnt
+FROM
+    OPENROWSET(
+        BULK 'https://azureopendatastorage.blob.core.windows.net/nyctlc/yellow/puYear=*/puMonth=*/*.snappy.parquet',
+        FORMAT='PARQUET'
+    ) nyc
+WHERE
+    nyc.filepath(1) = 2017
+    AND nyc.filepath(2) IN (1, 2, 3)
+    AND tpepPickupDateTime BETWEEN CAST('1/1/2017' AS datetime) AND CAST('3/31/2017' AS datetime)
+GROUP BY
+    passengerCount,
+    YEAR(tpepPickupDateTime)
+ORDER BY
+    YEAR(tpepPickupDateTime),
+    passengerCount;
+
+==============================  Explore csv files ==========================================================================
+
+-- This is auto-generated code
+SELECT
+    TOP 100 *
+FROM
+    OPENROWSET(
+        BULK 'https://adlsxyentadevuks96.dfs.core.windows.net/xyenta-dev-96-synapse/raw/taxi_zone.csv',
+        FORMAT = 'CSV',
+        PARSER_VERSION = '2.0',
+        HEADER_ROW = True,
+        FIELDTERMINATOR = ','
+    ) AS [result]
+
+-- Examine the DataTypes of our Data 
+EXEC sp_describe_first_result_set N'
+    SELECT TOP 100 *
+    FROM OPENROWSET(
+        BULK ''https://adlsxyentadevuks96.dfs.core.windows.net/xyenta-dev-96-synapse/raw/taxi_zone.csv'',
+        FORMAT = ''CSV'',
+        PARSER_VERSION = ''2.0'',
+        HEADER_ROW = TRUE
+    ) AS [result]'
+
+-- checks the max len of certain columns
+
+select max(len(LocationID)) as loc_len,
+max(len(Borough)) as Bor_len
+FROM
+    OPENROWSET(
+        BULK 'https://adlsxyentadevuks96.dfs.core.windows.net/xyenta-dev-96-synapse/raw/taxi_zone.csv',
+        FORMAT = 'CSV',
+        PARSER_VERSION = '2.0',
+        HEADER_ROW = True,
+        FIELDTERMINATOR = ','
+    ) AS [result]
+
+
+-- Define explicit Data Types using with
+SELECT
+    *
+FROM
+    OPENROWSET(
+        BULK 'https://adlsxyentadevuks96.dfs.core.windows.net/xyenta-dev-96-synapse/raw/taxi_zone.csv',
+        FORMAT = 'CSV',
+        PARSER_VERSION = '2.0',
+        HEADER_ROW = True,
+        FIELDTERMINATOR = ','
+    )
+
+    with (
+        LocationID SMALLINT,
+        Borough VARCHAR(15) COLLATE Latin1_General_100_CI_AI_SC_UTF8,
+        Zone VARCHAR(50) COLLATE Latin1_General_100_CI_AI_SC_UTF8,
+        service_zone VARCHAR(15) COLLATE Latin1_General_100_CI_AI_SC_UTF8
+    ) as [result]
+
+-- check again the data types 
+EXEC sp_describe_first_result_set N'
+    SELECT TOP 100 *
+    FROM OPENROWSET(
+        BULK ''https://adlsxyentadevuks96.dfs.core.windows.net/xyenta-dev-96-synapse/raw/taxi_zone.csv'',
+        FORMAT = ''CSV'',
+        PARSER_VERSION = ''2.0'',
+        HEADER_ROW = TRUE
+    ) with (
+        LocationID SMALLINT ,
+        Borough VARCHAR(15),
+        Zone VARCHAR(50),
+        service_zone VARCHAR(15)
+    ) as [result] '
+
+-- change collation 
+-- get the collations of all DB presented;
+select name, collation_name from sys.databases;
+
+-- create a new DB as nyc_taxi_discovery
+create DATABASE nyc_taxi_discovery;
+
+use nyc_taxi_discovery;
+
+create EXTERNAL data SOURCE nyc_taxi_data_raw
+with (
+    LOCATION = 'https://adlsxyentadevuks96.dfs.core.windows.net/xyenta-dev-96-synapse/raw'
+)
+
+
+-- qury from External data source
+select top 100 *
+from 
+OPENROWSET (BULK 'taxi_zone.csv',
+DATA_SOURCE = 'nyc_taxi_data_raw',
+FORMAT = 'CSV',
+        PARSER_VERSION = '2.0',
+HEADER_ROW = True,
+FIELDTERMINATOR = ','
+
+) as [result]
+
+-- drop external data source nyc_taxi_data_raw
+
+===================================================== Explore TSV FILES ======================================================================
+
+-- This is auto-generated code
+SELECT
+    TOP 100 *
+FROM
+    OPENROWSET(
+        BULK 'https://adlsxyentadevuks96.dfs.core.windows.net/xyenta-dev-96-synapse/raw/trip_type.tsv',
+        FORMAT = 'CSV',
+        PARSER_VERSION = '2.0',
+        HEADER_ROW = TRUE,
+        FIELDTERMINATOR ='\t'
+    ) AS [result]
+
+========================================================== Explore escpaed char files ================================================================
+-- This is auto-generated code
+use nyc_taxi_discovery;
+
+SELECT
+    TOP 100 *
+FROM
+    OPENROWSET(
+        BULK 'vendor.csv',
+        Data_source = 'nyc_taxi_data_raw',
+        FORMAT = 'CSV',
+        HEADER_ROW = TRUE,
+        PARSER_VERSION = '2.0'
+    ) AS [result]
+
+-- vendor escpaed
+SELECT
+    TOP 100 *
+FROM
+    OPENROWSET(
+        BULK 'vendor_escaped.csv',
+        Data_source = 'nyc_taxi_data_raw',
+        FORMAT = 'CSV',
+        
+        PARSER_VERSION = '2.0',
+        HEADER_ROW = TRUE,
+        ESCAPECHAR = '\\'
+    ) AS [vendor]
+
+
+------------------------------------------------------
+
+use nyc_taxi_discovery;
+
+-- This is auto-generated code
+SELECT
+    TOP 100 *
+FROM
+    OPENROWSET(
+        BULK 'calendar.csv',
+        Data_source = 'nyc_taxi_data_raw',
+        FORMAT = 'CSV',
+        HEADER_ROW = TRUE,
+        PARSER_VERSION = '2.0'
+    ) AS [result]
+
+
+-- check data types 
+EXEC sp_describe_first_result_set N' SELECT
+    TOP 100 *
+FROM
+    OPENROWSET(
+        BULK ''calendar.csv'',
+        Data_source = ''nyc_taxi_data_raw'',
+        FORMAT = ''CSV'',
+        HEADER_ROW = TRUE,
+        PARSER_VERSION = ''2.0''
+    ) AS [result]'
+
+
+-- change the data types 
+SELECT
+    TOP 100 *
+FROM
+    OPENROWSET(
+        BULK 'calendar.csv',
+        Data_source = 'nyc_taxi_data_raw',
+        FORMAT = 'CSV',
+        HEADER_ROW = TRUE,
+        PARSER_VERSION = '2.0'
+    ) with (
+        date_key int ,
+        date DATE,
+        year SMALLINT,
+        month TINYINT,
+        day TINYINT,
+        day_name VARCHAR(15),
+        day_of_year SMALLINT,
+        week_of_month TINYINT,
+        week_of_year TINYINT,
+        month_name VARCHAR(15),
+        year_month int,
+        year_week int
+    ) as cal;
+
+
+-- Re-check Data Types 
+EXEC sp_describe_first_result_set N' SELECT
+    TOP 100 *
+FROM
+    OPENROWSET(
+        BULK ''calendar.csv'',
+        Data_source = ''nyc_taxi_data_raw'',
+        FORMAT = ''CSV'',
+        HEADER_ROW = TRUE,
+        PARSER_VERSION = ''2.0''
+    )
+    with (
+        date_key int ,
+        date DATE,
+        year SMALLINT,
+        month TINYINT,
+        day TINYINT,
+        day_name VARCHAR(15),
+        day_of_year SMALLINT,
+        week_of_month TINYINT,
+        week_of_year TINYINT,
+        month_name VARCHAR(15),
+        year_month int,
+        year_week int
+    ) as cal    '
+
+
+
+================================================== Explore Multi or std Line JSON ==================================================================
+
+-- This is auto-generated code
+SELECT rate_code_id, rate_code
+FROM
+    OPENROWSET(
+        BULK 'https://adlsxyentadevuks96.dfs.core.windows.net/xyenta-dev-96-synapse/raw/rate_code.json',
+        FORMAT = 'CSV',
+        FIELDQUOTE = '0x0b',
+        FIELDTERMINATOR ='0x0b',
+        ROWTERMINATOR = '0x0b'
+    )
+    WITH (
+        jsonContent varchar(MAX)
+    ) AS [result]
+    cross apply openjson(jsonContent)
+    with (
+        rate_code_id SMALLINT,
+        rate_code VARCHAR(20)
+    );
+
+
+-- for multi-line json (no diff at all same code) --
+SELECT rate_code_id, rate_code
+FROM
+    OPENROWSET(
+        BULK 'https://adlsxyentadevuks96.dfs.core.windows.net/xyenta-dev-96-synapse/raw/rate_code_multi_line.json',
+        FORMAT = 'CSV',
+        FIELDQUOTE = '0x0b',
+        FIELDTERMINATOR ='0x0b',
+        ROWTERMINATOR = '0x0b'
+    )
+    WITH (
+        jsonContent varchar(MAX)
+    ) AS [result]
+    cross apply openjson(jsonContent)
+    with (
+        rate_code_id SMALLINT,
+        rate_code VARCHAR(20)
+    );
+
+============================================================ Explore single line JSON ============================================================
+
+use nyc_taxi_discovery;
+
+-- for single line json
+
+select CAST(JSON_VALUE(json_data, '$.payment_type') as SMALLINT) payment_type,
+CAST(JSON_VALUE(json_data, '$.payment_type_desc') as VARCHAR(20)) payment_type_desc
+ from OPENROWSET(
+    BULK  'https://adlsxyentadevuks96.dfs.core.windows.net/xyenta-dev-96-synapse/raw/payment_type.json',
+    FORMAT = 'CSV',
+    PARSER_VERSION = '1.0',
+    FIELDTERMINATOR = '0x0b',
+    FIELDQUOTE = '0x0b'
+   
+)
+with (
+    json_data NVARCHAR(max)
+) as result
+
+
+
+-- check for DataTypes 
+
+EXEC sp_describe_first_result_set N'
+    select 
+        CAST(JSON_VALUE(json_data, ''$.payment_type'') as SMALLINT) payment_type,
+        CAST(JSON_VALUE(json_data, ''$.payment_type_desc'') as VARCHAR(20)) payment_type_desc
+    from OPENROWSET(
+        BULK  ''https://adlsxyentadevuks96.dfs.core.windows.net/xyenta-dev-96-synapse/raw/payment_type.json'',
+        FORMAT = ''CSV'',
+        PARSER_VERSION = ''1.0'',
+        FIELDTERMINATOR = ''0x0b'',
+        FIELDQUOTE = ''0x0b''
+    ) with (
+        json_data NVARCHAR(max)
+    ) as result
+';
+
+
+-- using open_json for large json files or multiline data
+
+select payment_type, description
+ from OPENROWSET(
+    BULK  'https://adlsxyentadevuks96.dfs.core.windows.net/xyenta-dev-96-synapse/raw/payment_type.json',
+    FORMAT = 'CSV',
+    PARSER_VERSION = '1.0',
+    FIELDTERMINATOR = '0x0b',
+    FIELDQUOTE = '0x0b'
+   
+)
+with (
+    json_data NVARCHAR(max)
+) as result
+cross APPLY openjson(json_data)
+with (
+    payment_type SMALLINT,
+    -- rename column 
+    description varchar(20) '$.payment_type_desc'
+);
+
+
+-- ----------------------------------------------------
+-- Query for Single line json have array inside of it using json_val
+-- ---------------------------------------------------
+select CAST(JSON_VALUE(json_data, '$.payment_type') as SMALLINT) payment_type,
+CAST(JSON_VALUE(json_data, '$.payment_type_desc[0].value') as VARCHAR(20)) payment_type_desc0,
+CAST(JSON_VALUE(json_data, '$.payment_type_desc[1].value') as VARCHAR(20)) payment_type_desc1
+ from OPENROWSET(
+    BULK  'https://adlsxyentadevuks96.dfs.core.windows.net/xyenta-dev-96-synapse/raw/payment_type_array.json',
+    FORMAT = 'CSV',
+    PARSER_VERSION = '1.0',
+    FIELDTERMINATOR = '0x0b',
+    FIELDQUOTE = '0x0b'
+   
+)
+with (
+    json_data NVARCHAR(max)
+) as result
+
+--  -- --   ---------  Best approach is use openjson 
+select *
+ from OPENROWSET(
+    BULK  'https://adlsxyentadevuks96.dfs.core.windows.net/xyenta-dev-96-synapse/raw/payment_type_array.json',
+    FORMAT = 'CSV',
+    PARSER_VERSION = '1.0',
+    FIELDTERMINATOR = '0x0b',
+    FIELDQUOTE = '0x0b'
+   
+)
+with (
+    json_data NVARCHAR(max)
+)as result 
+cross APPLY openjson(json_data)
+with (
+    payment_type SMALLINT ,
+    payment_type_desc NVARCHAR(max) as JSON
+)cross apply openjson(payment_type_desc) -- to explore Array 
+with (
+    sub_type SMALLINT,
+    description VARCHAR(20) '$.value'
+);
+
+
+================================================ Exploring Folders =====================================
+SELECT
+    TOP 100 *
+FROM
+    OPENROWSET(
+        BULK 'https://adlsxyentadevuks96.dfs.core.windows.net/xyenta-dev-96-synapse/raw/trip_data_green_csv/year=2020/month=01/green_tripdata_2020-01.csv',
+        FORMAT = 'CSV',
+        PARSER_VERSION = '2.0',
+        HEADER_ROW = TRUE
+    ) AS [result]
+
+
+-- for all the files presented in the 2020 partition 
+SELECT
+    TOP 100 *
+FROM
+    OPENROWSET(
+        BULK 'https://adlsxyentadevuks96.dfs.core.windows.net/xyenta-dev-96-synapse/raw/trip_data_green_csv/year=2020/**',
+        FORMAT = 'CSV',
+        PARSER_VERSION = '2.0',
+        HEADER_ROW = TRUE
+    ) AS [result]
+
+-- for multiple month in a single partition year 
+
+SELECT
+    TOP 100 *
+FROM
+    OPENROWSET(
+        BULK 
+        ('https://adlsxyentadevuks96.dfs.core.windows.net/xyenta-dev-96-synapse/raw/trip_data_green_csv/year=2020/month=01/*.csv', 
+         'https://adlsxyentadevuks96.dfs.core.windows.net/xyenta-dev-96-synapse/raw/trip_data_green_csv/year=2020/month=02/*.csv'),
+        FORMAT = 'CSV',
+        PARSER_VERSION = '2.0',
+        HEADER_ROW = TRUE
+    ) AS [result]
+
+-- for all years and months
+SELECT
+    TOP 100 *
+FROM
+    OPENROWSET(
+        BULK 'https://adlsxyentadevuks96.dfs.core.windows.net/xyenta-dev-96-synapse/raw/trip_data_green_csv/year=*/month=*/*.csv',
+        FORMAT = 'CSV',
+        PARSER_VERSION = '2.0',
+        HEADER_ROW = TRUE
+    ) AS [result]
+
+
+-- get the filename along side of each records
+
+SELECT
+    Top 100
+    result.filename() as File_name,
+    result.*
+FROM
+    OPENROWSET(
+        BULK 'https://adlsxyentadevuks96.dfs.core.windows.net/xyenta-dev-96-synapse/raw/trip_data_green_csv/year=2020/month=*/*.csv',
+        FORMAT = 'CSV',
+        PARSER_VERSION = '2.0',
+        HEADER_ROW = TRUE
+    ) AS [result]
+
+
+-- count of records 
+SELECT
+    
+    result.filename() as File_name,
+    count(1) as record_count
+FROM
+    OPENROWSET(
+        BULK 'https://adlsxyentadevuks96.dfs.core.windows.net/xyenta-dev-96-synapse/raw/trip_data_green_csv/year=2020/month=*/*.csv',
+        FORMAT = 'CSV',
+        PARSER_VERSION = '2.0',
+        HEADER_ROW = TRUE
+    ) AS [result]
+
+    GROUP by result.filename()
+    order by result.filename();
+
+-- for specific partitions
+SELECT
+    
+    result.filename() as File_name,
+    count(1) as record_count
+FROM
+    OPENROWSET(
+        BULK 'https://adlsxyentadevuks96.dfs.core.windows.net/xyenta-dev-96-synapse/raw/trip_data_green_csv/year=2020/month=*/*.csv',
+        FORMAT = 'CSV',
+        PARSER_VERSION = '2.0',
+        HEADER_ROW = TRUE
+    ) AS [result]
+    where result.filename() in ('green_tripdata_2020-01.csv', 'green_tripdata_2020-04.csv')
+    GROUP by result.filename()
+    order by result.filename();
+
+-- use of filepath.. filepath even takes a parameters 
+
+SELECT
+    
+    -- result.filename() as File_name,
+    result.filepath() as file_path,
+    count(1) as record_count
+FROM
+    OPENROWSET(
+        BULK 'https://adlsxyentadevuks96.dfs.core.windows.net/xyenta-dev-96-synapse/raw/trip_data_green_csv/year=*/month=*/*.csv',
+        FORMAT = 'CSV',
+        PARSER_VERSION = '2.0',
+        HEADER_ROW = TRUE
+    ) AS [result]
+    GROUP by result.filename(), result.filepath()
+    order by result.filename(), result.filepath();
+
+
+-- pass the parameters in the filepath() from the Bulk link 
+
+SELECT
+    -- result.filename() as File_name,
+    result.filepath(1) as year,
+    result.filepath(2) as month,
+    count(1) as record_count
+FROM
+    OPENROWSET(
+        BULK 'https://adlsxyentadevuks96.dfs.core.windows.net/xyenta-dev-96-synapse/raw/trip_data_green_csv/year=*/month=*/*.csv',
+        FORMAT = 'CSV',
+        PARSER_VERSION = '2.0',
+        HEADER_ROW = TRUE
+    ) AS [result]
+    GROUP by  result.filepath(1), result.filepath(2)
+    order by  result.filepath(1), result.filepath(2);
+
+
+-- filter the filepath 
+
+SELECT
+    -- result.filename() as File_name,
+    result.filepath(1) as year,
+    result.filepath(2) as month,
+    count(1) as record_count
+FROM
+    OPENROWSET(
+        BULK 'https://adlsxyentadevuks96.dfs.core.windows.net/xyenta-dev-96-synapse/raw/trip_data_green_csv/year=*/month=*/*.csv',
+        FORMAT = 'CSV',
+        PARSER_VERSION = '2.0',
+        HEADER_ROW = TRUE
+    ) AS [result]
+    where result.filepath(1) = '2020' 
+    and result.filepath(2) in ('06', '07', '08')
+    GROUP by  result.filepath(1), result.filepath(2)
+    order by  result.filepath(1), result.filepath(2);
+
+====================================================== Exploring Parquet Files =========================================================

@@ -1,0 +1,774 @@
+======================= Data Validations Scripts =====================================
+
+                         ***1.fnSetUpMountPoints***
+
+-- Here we will define  a function to create mount points for stage layer as well as Raw Layer
+-- In Raw Layer the hierarchy followed as 
+        BadRecord
+		|-folderName
+			|- yyyy
+			   |-MM
+			     |-dd
+				|-filename
+	
+	GoodRecords
+		|-folderName
+			|- yyyy
+			   |-MM
+			     |-dd
+				|-filename
+
+
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+#import datetime
+from datetime import datetime
+from datetime import timedelta
+#import pytz
+
+dt_string = datetime.now().strftime("year=%Y/Month=%m/day=%d")
+
+
+** function for stg mount points
+
+
+def get_secrets():
+    try:
+        
+        application_id = dbutils.secrets.get(scope='xyenta-dev-96-uks', key='clientid')
+        authenticationKey = dbutils.secrets.get(scope='xyenta-dev-96-uks', key='secretvalue')
+        tenant_id = dbutils.secrets.get(scope='xyenta-dev-96-uks', key='tenantid')
+
+        return application_id, authenticationKey, tenant_id
+    
+    except Exception as e :
+        print(f"An error occure in get_secrets method:: {str(e)}")
+        raise e 
+
+def mount_stage(adls_container_name, storage_account_name, adls_folder_name, mount_point):
+    try:
+        dt_string = datetime.now().strftime("year=%Y/Month=%m/day=%d")
+            
+        application_id, authenticationKey, tenant_id = get_secrets()
+        
+        #formated_path = f"year = {now.strftime('%Y')}/month = {now.strftime('%m')}/day = {now.strftime('%d')}"
+    
+        #date_folder_path = f"{adls_folder_name}/{dt_string}"
+        
+        source = f"abfss://{adls_container_name}@{storage_account_name}.dfs.core.windows.net/{adls_folder_name}/"
+        print(source)
+        endpoint = f"https://login.microsoftonline.com/{tenant_id}/oauth2/token"
+
+        configs = {
+            "fs.azure.account.auth.type": "OAuth",
+            "fs.azure.account.oauth.provider.type": "org.apache.hadoop.fs.azurebfs.oauth2.ClientCredsTokenProvider",
+            "fs.azure.account.oauth2.client.id": f"{application_id}",
+            "fs.azure.account.oauth2.client.secret": f"{authenticationKey}",
+            "fs.azure.account.oauth2.client.endpoint": f"{endpoint}",
+            "fs.azure.createRemoteFileSystemDuringInitialization": "true"
+        }
+
+        if not any(mount.mountPoint == mount_point for mount in dbutils.fs.mounts()):
+            dbutils.fs.mount(
+                source=source,
+                mount_point=mount_point,
+                extra_configs=configs
+            )
+            
+        
+    except Exception as e:
+        print(f"An error occure in mount_adls_folde method:: {str(e)}")
+        raise e 
+
+
+
+#Example usage:
+adlsContainerName = 'xyenta-dev-96-stg'
+storageAccountName = 'adlsxyentadevuks96'
+
+adlsFolderName = 'Orders'
+
+mountPoint = "/mnt/Dev96Stage/Orders"
+
+
+mount_stage(adls_container_name= adlsContainerName, storage_account_name= storageAccountName, adls_folder_name= adlsFolderName, mount_point= mountPoint)
+
+
+
+
+*** function for Raw Layer mount points:
+
+def mount_raw_layer(adls_container_name, storage_account_name, adls_folder_name, mount_point):
+    try:
+        
+    
+        #year, month, day = get_current_date()
+        
+        application_id, authenticationKey, tenant_id = get_secrets()
+        
+        folder_path = f"{adls_folder_name}"
+        
+        source = f"abfss://{adls_container_name}@{storage_account_name}.dfs.core.windows.net/{folder_path}/"
+        
+        endpoint = f"https://login.microsoftonline.com/{tenant_id}/oauth2/token"
+
+        configs = {
+            "fs.azure.account.auth.type": "OAuth",
+            "fs.azure.account.oauth.provider.type": "org.apache.hadoop.fs.azurebfs.oauth2.ClientCredsTokenProvider",
+            "fs.azure.account.oauth2.client.id": f"{application_id}",
+            "fs.azure.account.oauth2.client.secret": f"{authenticationKey}",
+            "fs.azure.account.oauth2.client.endpoint": f"{endpoint}",
+            "fs.azure.createRemoteFileSystemDuringInitialization": "true"
+        }
+
+        if not any(mount.mountPoint == mount_point for mount in dbutils.fs.mounts()):
+            dbutils.fs.mount(
+                source=source,
+                mount_point=mount_point,
+                extra_configs=configs
+            )
+        
+    except Exception as e:
+        print(f"An error occure in mount_adls_folde method:: {str(e)}")
+        raise e 
+
+#Example Usage:
+adlsContainerName = 'xyenta-dev-96-raw'
+storageAccountName = 'adlsxyentadevuks96'
+
+adlsFolderName = 'GoodRecords'
+
+mountPoint = "/mnt/raw/GoodRecords"
+
+mount_raw_layer(adls_container_name= adlsContainerName, storage_account_name= storageAccountName, adls_folder_name= adlsFolderName, mount_point= mountPoint)
+
+
+				****fnControlTables****
+-- In this notebook we define Spark Session for creating dataframes , controlDF from ControlTable and Referencedf from Reference Table...
+-- Reference Table defined in DataBase as 
+
+create table dev.schema_refe (
+Id int identity(1,1),
+SrcContainerName nvarchar(max),
+SrcFolderName nvarchar(max),
+SrcFileName nvarchar(max),
+SrcColumns nvarchar(max),
+SrcColumnType nvarchar(max),
+CreatedAt datetime DEFAULT getDate()
+)
+
+-- control Table defined in DataBase as follows
+
+
+create table Dev.TControlDataValidation(
+Id int identity(1,1),
+FileName nvarchar(max),
+FilePath nvarchar(max),
+OutPath nvarchar(max),
+OutFolderName nvarchar(max),
+CreatedAt datetime DEFAULT getDate()
+);
+
+
+-- code:
+Spark_session = SparkSession.builder.appName('DataValidation').master("local[*]").enableHiveSupport().getOrCreate()
+
+jdbcHostname = "prospectmanagement.database.windows.net"
+jdbcDatabase = "ProspectManagement"
+jdbcPort = 1433
+jdbcUrl = "jdbc:sqlserver://{0}:{1};database={2}".format(jdbcHostname, jdbcPort, jdbcDatabase)
+connectionProperties = {
+"user" : "ProspectManagementAdmin@prospectmanagement",
+"password" : "Admin@123",
+"driver" : "com.microsoft.sqlserver.jdbc.SQLServerDriver"
+}
+
+control_df = spark.read.jdbc(url=jdbcUrl, table='dev.TControlDataValidation',properties=connectionProperties)
+
+#control_df.show(truncate= False)
+#df.withColumn('FilePath', lit(new_file_path + df['StgFolder']))
+
+new_base_path = 'dbfs:/mnt/Dev96Stage/'
+
+# Update the DataFrame based on conditions
+control_df = control_df.withColumn(
+    'FilePath',
+    when(col('StgFolder') == 'Orders', lit(new_base_path + 'Orders/'))
+    .when(col('StgFolder') == 'People', lit(new_base_path + 'People/'))
+    .when(col('StgFolder') == 'Returns', lit(new_base_path + 'Returns/'))
+    .otherwise(lit(new_base_path + 'Unknown/'))
+)
+
+#for adding groupby column name
+control_df = control_df.withColumn(
+    'GroupByColumn',
+    
+    when(col('StgFolder') == 'Orders', lit('Row ID'))
+    .when(col('StgFolder') == 'People', lit('Person'))
+    .when(col('StgFolder') == 'Returns', lit('Order ID'))
+    .otherwise(lit('unkown'))
+)
+
++---+------------+-----------------------------+---------+-------------+-----------------------+-------------+
+|Id |FileName    |FilePath                     |StgFolder|OutFolderName|CreatedAt              |GroupByColumn|
++---+------------+-----------------------------+---------+-------------+-----------------------+-------------+
+|1  |Orders_data |dbfs:/mnt/Dev96Stage/Orders/ |Orders   |Orders       |2024-01-05 10:50:03.377|Row ID       |
+|2  |People_data |dbfs:/mnt/Dev96Stage/People/ |People   |People       |2024-01-05 10:50:03.377|Person       |
+|3  |Returns_data|dbfs:/mnt/Dev96Stage/Returns/|Returns  |Returns      |2024-01-05 10:50:03.377|Order ID     |
++---+------------+-----------------------------+---------+-------------+-----------------------+-------------+
+
+
+reference_df = spark.read.jdbc(url=jdbcUrl, table='dev.schema_refe',properties=connectionProperties)
+
+
+					******fnLogsConfig*******
+
+-- Define logs, so that it can be used  for each and every model/notebook for their custom logs 
+
+class LogsConfig:
+    def __init__(self):
+        self.logger = logging.getLogger(dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get())
+        self.logger.setLevel(logging.DEBUG)
+        consoleHandler = logging.StreamHandler(sys.stdout)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s: %(message)s')
+        consoleHandler.setFormatter(formatter)
+        self.logger.addHandler(consoleHandler)
+        self.logger.propagate = 0 
+
+
+================================================ fnColumnComparision ================================================================
+
+-- This Notebook is develop in such a way that it can be helpful for us to compare columns between actual dfs from reference_df by sub refcol- dfscol
+-- if condition pass it will write dataframe to GoodRecords path else raise an error 
+
+-- Call the fnSetUpMounts , fnControlNb and fnLogsConfig notebooks.. so that we can utilize the mount points, logs etc., with out defining it again in each notebook
+
+
+%run /validation/fnSetUpMountPoints
+
+%run /validation/fnControlNb
+
+%run /validation/fnLogsConfigs
+
+#calling instance of LogsClass
+
+if 'mylogs' not in locals():
+    
+    mylogs = LogsConfig()
+
+#ColumnComparision code 
+
+#ColumnComparision code 
+
+def column_comparision(controldf, sparksession, referencedf):
+    """
+    controldf : is a control dataframe where parameters are defined
+    sparksession : ref to spark session which is using for this notebook
+    referencdf : reference_df 
+    """
+    try:
+
+        #getting the fileName, filePath to creates the dataframes respectively 
+        mylogs.logger.info("getting the fileName, filePath to creates the dataframes respectively ")
+        for row in controldf.collect():
+
+            filename = row['FileName']
+            filepath = row['FilePath']
+            
+            outfolder = row['OutFolderName']
+            
+            #refpath = row['RefFilePath']
+
+            mylogs.logger.warning("{} for {} path started creating the df respectively".format(filename, filepath))
+
+            dfs = sparksession.read.format('csv').option('header', True).option('inferSchema', True).load(filepath)
+
+            mylogs.logger.warning("{} for {} path dataframe created..., Looking frwd".format(filename, filepath))
+
+            dfs_columns = set(map(str.lower, dfs.columns))
+            #print(dfs_columns)
+
+            ref_filter = referencedf.filter(col('SrcFileName') == filename)
+
+            ref_columns = set(map(str.lower, ref_filter.select('SrcColumns').rdd.flatMap(lambda x:x).collect()))
+
+            #check for missing columns
+            missing_columns = ref_columns - dfs_columns
+            if missing_columns :
+                #mylogs.logger.warning(f"Column names do not match. Missing columns: {missing_columns}")
+                error_message = "Column names don't match for {} and missing columns are: {}".format(filename, missing_columns)
+                
+                mylogs.logger.error(error_message)
+                
+                raise ValueError(error_message)
+                
+            else:
+                mylogs.logger.warning(f"columns match for {filename}.")
+                
+                mylogs.logger.info("writing df of {} into raw layer as csv file".format(filename))
+
+                output_good_path = f"/mnt/raw/GoodRecords/{outfolder}/{dt_string}"
+                
+                dfs.coalesce(1).write.mode('overwrite').option("header", "true").parquet(output_good_path)
+
+                mylogs.logger.info("successfully written ... to {}".format(output_good_path))
+                
+               
+    except Exception as e:
+        mylogs.logger.warning(f"An error occurred: {str(e)}")
+        raise e
+
+
+#calling
+
+column_comparision(controldf= control_df, sparksession = Spark_session, referencedf= reference_df)
+
+======================================================= fnSchemaComparision ===================================================================
+
+-- In this notebook we will compare schema of actual dfs and reference df. If missmatch raise error else write to goodpath (raw)
+
+-- Call the fnSetUpMounts , fnControlNb and fnLogsConfig notebooks.. so that we can utilize the mount points, logs etc., with out defining it again in each notebook
+
+
+%run /validation/fnSetUpMountPoints
+
+%run /validation/fnControlNb
+
+%run /validation/fnLogsConfigs
+
+#calling instance of LogsClass
+if 'my_logs' not in locals():
+    my_logs = LogsConfig()
+
+
+def schema_comparision(controldf, sparksession, referencedf):
+    """
+    controldf : is a control dataframe where parameters are defined
+    sparksession : ref to spark session which is using for this notebook
+    referencdf : reference_df 
+    """
+    try:
+        my_logs.logger.info("get the fileName and FilePath from controldf in order to create dfs")
+        for row in controldf.collect():
+
+            filename = row['FileName']
+            filepath = row['FilePath']
+            
+            outfolder = row['OutFolderName']
+            
+
+            my_logs.logger.warning("{} for {} path started creating the df respectively".format(filename, filepath))
+
+            dfs = sparksession.read.format('csv').option('header', True).option('inferSchema', True).load(filepath)
+
+            my_logs.logger.warning("{} for {} path dataframe created..., Looking frwd".format(filename, filepath))
+
+            ref_filter = referencedf.filter(col('SrcFileName') == filename)
+            
+            my_logs.logger.info("get the columns from filtered referencedf for the particular file")
+
+            for x in ref_filter.collect():
+
+                columnNames = x['SrcColumns']
+                #converting str to list to avoid getting the only characters from list at time of returning or printing missied columns
+
+                columnNamesList = [x.strip().lower for x in columnNames.split(",")]
+
+                refDataTypes = x['SrcColumnType'] 
+
+                refTypeList = [x.strip().lower() for x in refDataTypes.split(",")]
+            
+                #get the schema of the dataframe to which we need to target
+                my_logs.logger.info("get the schema of the dataframe to which we need to target")
+
+                dfsTypes = dfs.schema[columnNames].dataType.simpleString()
+
+                dfsTypesList = [x.strip().lower() for x in dfsTypes.split(",")]
+                #print(dfsTypesList)
+                
+                missmatchedColumns = [(col_name, df_types, ref_type) for col_name, df_types, ref_type in zip(columnNamesList,dfsTypesList,refTypeList)if df_types != ref_type]
+
+                if missmatchedColumns:
+                    error_msg = "Schema mismatch for {} in the following columns:".format(filename)
+                    #my_logs.logger.info("Schema mismatch for {} in the following columns:".format(filename))
+                    for col_name, df_type, ref_type in missmatchedcolumns:
+                         my_logs.logger.info(f"ColumnName: {col_name}, DataFrameType: {df_type}, ReferenceType: {ref_type}")
+
+                    my_logs.logger.error(error_msg)
+                    raise ValueError(error_message)
+                    
+                    
+            
+            my_logs.logger.info("All columns schema matched for the {} with the reference..Proceess Done".format(filename))
+            my_logs.logger.info("Now writing df of {} into raw layer...".format(filename))
+            
+            output_good_path = f"/mnt/raw/GoodRecords/{outfolder}/{dt_string}"
+                
+            dfs.coalesce(1).write.mode('overwrite').option("header", "true").parquet(output_good_path)
+
+            my_logs.logger.info("successfully written ...to {} for {}".format(output_good_path, filename))
+            
+    except Exception as e:
+        my_logs.logger.error(f"An error occurred: {str(e)}")
+        raise e 
+
+#checks
+schema_comparision(controldf = control_df, sparksession = Spark_session, referencedf = reference_df)
+
+=============================================================== fnCheckForDuplocates ====================================================================
+
+-- In this notebook we will define a function for checking is their any duplocates present in the actual dfs .
+
+-- If their send to BadRecordsPath , else GoodRecordsPath 
+
+-- Call the fnSetUpMounts , fnControlNb and fnLogsConfig notebooks.. so that we can utilize the mount points, logs etc., with out defining it again in each notebook
+
+
+%run /validation/fnSetUpMountPoints
+
+%run /validation/fnControlNb
+
+%run /validation/fnLogsConfigs
+
+
+if 'dup_logs' not in locals():
+    
+    dup_logs = LogsConfig()
+
+
+def CheckForDuplicates(controldf, spsession):
+    dup_logs.logger.info("Entered into the CheckFor Duplicated Method..")
+    try:
+        dup_logs.logger.info("getting the filename and filepath from controldf...")
+        for x in controldf.collect():
+            filename = x['FileName']
+            filepath = x['FilePath']
+            folder = x['StgFolder']
+            grpName = x['GroupByColumn']
+            outfolder = x['OutFolderName']
+
+            dup_logs.logger.info("{} for {} path started creating the df respectively".format(filename, filepath))
+            dup_logs.logger.info(f"stage path: {filepath}")
+
+            dfs = spsession.read.format('csv').option('header', True).option('inferSchema', True).load(f'{filepath}{dt_string}')
+
+            #display(dfs)
+
+            dup_logs.logger.info("{} for {} path dataframe created..., Looking frwd".format(filename, filepath))
+
+            dup_logs.logger.info("getting the count of duplicate records by drop duplicated.count")
+
+            dup_logs.logger.info('Identify duplicate records')
+            
+            #duplicate_df = dfs.groupBy(dfs.columns).count().filter("count > 1").select(dfs.columns)
+            window_spec = Window().partitionBy(grpName).orderBy(desc(grpName))
+            
+            duplicate_df = dfs.withColumn('rn', row_number().over(window_spec))
+            
+            #duplicate_df.show(30)
+
+            #duplicate_df = dfs.groupBy(dfs.columns).count().select(dfs.columns)
+
+            #display(duplicate_df.filter(col('rn') != 1))
+            
+            duplicate_df_records = duplicate_df.filter(col('rn') != 1)
+
+            #duplicate_df.show(30)
+            
+            duplicate_rows = duplicate_df_records.count()
+
+            dup_logs.logger.info("Number of duplicate rows are : {}".format(duplicate_rows))
+
+            if duplicate_rows >= 1:
+                dup_logs.logger.info("writing duplicate records to bad record path if count >= 1")
+                output_bad_path = f'dbfs:/mnt/raw/BadRecords/{filename}-Duplicates/{dt_string}'
+                duplicate_df_records.coalesce(1).write.mode('overwrite').option("header", "true").parquet(output_bad_path)
+                
+            output_good_path_non_duplicate = f"/mnt/raw/GoodRecords/{outfolder}/{dt_string}"
+            
+            non_duplicate_df = duplicate_df.filter('rn = 1')
+            
+            non_duplicate_df.show(30)
+            
+            non_duplicate_rows = non_duplicate_df.count()
+            
+            dup_logs.logger.info(f"Non-dup records:{non_duplicate_rows} ")
+            #display(non_duplicate_df)
+            
+            if not non_duplicate_df.isEmpty() :
+                dup_logs.logger.info("Writing non-duplicate records to good record path: ")
+                non_duplicate_df.coalesce(1).write.mode('overwrite').option("header", "true").parquet(output_good_path_non_duplicate)
+                dup_logs.logger.info("Successfully written non-duplicate records for {} to {}".format(filename, output_good_path_non_duplicate))
+            else:
+                dup_logs.logger.info("No non-duplicate records found for {}".format(filename))
+
+    except Exception as e:
+        dup_logs.logger.error("An error occurred in CheckForDuplicated::", str(e))
+        raise e
+
+CheckForDuplicates(controldf= control_df, spsession= Spark_session)
+
+
+=========================================================== fnCheckForNulls ====================================================================
+
+-- In this notebook we define a function for checking Null Values in actual dfs
+
+-- Here i assumed a conditon like if null values in each and every column >=1 then write to BadRecords Path, else GoodRecords Path
+
+-- Call the fnSetUpMounts , fnControlNb and fnLogsConfig notebooks.. so that we can utilize the mount points, logs etc., with out defining it again in each notebook
+
+
+%run /validation/fnSetUpMountPoints
+
+%run /validation/fnControlNb
+
+%run /validation/fnLogsConfigs
+
+
+if 'logs_null' not in locals():
+    logs_null = LogsConfig()
+
+
+
+def CheckForNullF(controldf, spsession):
+    try:
+        logs_null.logger.info("Executing CheckForNull method...& get the filename and path from controldf")
+        for x in controldf.collect():
+            filename = x["FileName"]
+            filepath = x["FilePath"]
+            outfolder = x["OutFolderName"]
+
+            logs_null.logger.info("{} for {} path started creating the df respectively".format(filename, filepath))
+
+            dfs = spsession.read.format('csv').option('header', True).option('inferSchema', True).load(filepath)
+
+            logs_null.logger.warning("Executing the actual logic for null count...")
+
+            # Filter rows with at least one null value 
+            null_rows = dfs.filter(greatest(*[col(x).isNull() for x in dfs.columns]))  
+            #null_rows.show(30)
+            # Get the count of rows with at least one null value
+            null_rows_count = null_rows.count()
+
+            # Filter rows with all non-null values
+            non_null_rows = dfs.filter(least(*[col(x).isNotNull() for x in dfs.columns]))
+            
+            display(non_null_rows)
+
+            # Write non-null rows to the "good" path
+            if non_null_rows.count() > 0:
+                output_good_path = f"/mnt/raw/GoodRecords/{outfolder}/{dt_string}"
+                non_null_rows.coalesce(1).write.mode('overwrite').option("header", True).parquet(output_good_path)
+                logs_null.logger.info("Successfully written file {} to {}".format(filename, output_good_path))
+
+            # Write null rows to the "bad" path
+            if null_rows_count > 0:
+                output_bad_path = f'dbfs:/mnt/raw/BadRecords/{filename}-NullRecords/{dt_string}'
+                null_rows.coalesce(1).write.mode('overwrite').option("header", True).parquet(output_bad_path)
+                logs_null.logger.info("Writing records with null values to bad record path")        
+        
+            else:
+                logs_null.logger.info("No records without null values or empty spaces found for {}".format(filename))
+    except Exception as e:
+        logs_null.logger.error("An error occurred while executing CheckForNull::", str(e))
+        raise e
+
+
+
+CheckForNullF(control_df, Spark_session)
+
+
+==================================================== fnCheckForDateFormat =================================================================================
+
+-- In this notebook defined a fucntion to check the DateFormat on top of our Dataframes either presented in right format or not presented
+
+-- format: yyyy/MM/dd 
+
+-- This function will checks the actual dataframes either they consists of Date Associated columns are not ... If their it will take those columns and check according the format specified
+
+
+-- If their are no columns assocaited with Date then it return to GoodRecords Path (because no need to check date format.. if at all not date column presented)
+
+
+-- Call the fnSetUpMounts , fnControlNb and fnLogsConfig notebooks.. so that we can utilize the mount points, logs etc., with out defining it again in each notebook
+
+
+%run /validation/fnSetUpMountPoints
+
+%run /validation/fnControlNb
+
+%run /validation/fnLogsConfigs
+
+
+
+if 'date_logs' not in locals():
+    date_logs = LogsConfig()
+
+def DateFormatCheck(controldf, spsession, refdf):
+    
+    date_logs.logger.info("get the fileName and FilePath from controldf in order to create dfs")
+
+    for x in controldf.collect():
+        filename = x['FileName']
+        filepath = x['FilePath']
+        
+        outfolder = x['OutFolderName']
+
+        date_logs.logger.info("{} for {} path started creating the df respectively".format(filename, filepath))
+
+        try:
+            
+            dfs = spsession.read.format('csv').option('header', True).option('inferSchema', True).load(filepath)
+
+            date_logs.logger.info("{} for {} path dataframe created..., Looking frwd".format(filename, filepath))
+
+            ref_filter = refdf.filter(col('SrcFileName') == filename)
+
+            date_logs.logger.info("getting the those columns have endswith Date from referencedf")
+            
+            date_columns_ref = [row['SrcColumns'] for row in ref_filter.select('SrcColumns').filter(col('SrcColumns').endswith('Date')).collect()]
+
+            date_logs.logger.info("getting the columns which ends with date from dfs")
+            
+            date_columns_dfs = [col for col in dfs.columns if col.endswith('Date')]
+
+            date_logs.logger.warning("checking the datecolumns from refdf present in dfs...")
+
+            if date_columns_ref:
+
+                for date_column in date_columns_ref:
+                    if date_column in date_columns_dfs:
+                        
+                        date_logs.logger.warning(f"Date column '{date_column}' found in both refdf & dfs for {filename}")
+
+                        format_check = 'yyyy/MM/dd'
+                        
+                        date_logs.logger.warning("checking with the format specified")
+
+                        dfs = dfs.withColumn(
+                            'bad_record',
+                            when(col(date_column).isNull() , "False")
+                                .when(to_date(col(date_column), format_check).isNotNull(), "Not Matched")
+                                .otherwise("Matched")
+                        )
+                        
+                        #display(dfs)
+
+
+                    else:
+                        date_logs.logger.error(f"Date column '{date_column}' not found in dfs of {filename}")
+
+
+                bad_records_df = dfs.filter(col('bad_record') == 'Not Matched')
+                
+                
+                #display(bad_records_df)
+                
+                good_records_df = dfs.filter(col('bad_record') == 'Matched')
+                
+                if bad_records_df.count() >= 1:
+                    date_logs.logger.info("Writing dfs into the bad path if any null values are there...")
+                    output_bad_path = f'dbfs:/mnt/raw/BadRecords/{filename}-DateMissMatched/{dt_string}'
+                    bad_records_df.coalesce(1).write.mode('overwrite').option("header", "true").parquet(output_bad_path)
+                    date_logs.logger.info("Bad records written for file {} to path:{}".format(filename, output_bad_path))
+
+                else:
+                    date_logs.logger.info('writting good records')
+                    output_good_path = f"/mnt/raw/GoodRecords/{outfolder}/{dt_string}"
+                    good_records_df.coalesce(1).write.mode('overwrite').option("header", "true").parquet(output_good_path)
+                    date_logs.logger.info("Good records Successfully written for file {} to path: {}".format(filename, good_records_df))
+            else:
+                date_logs.logger.info("No date column found in refdf")
+            
+
+        except Exception as e:
+            date_logs.logger.error(f'An error occured while executing DateFormatCheck... for {filename}: {str(e)}')
+            raise e 
+        
+
+
+DateFormatCheck(controldf= control_df, spsession=Spark_session, refdf=reference_df)
+
+=============================================================== fnCorruptedRecords Check ==========================================================================
+
+
+def CorruptedRecords(controldf, Spsession):
+    try:
+        corrupted_logs.logger.info("Reading the controldf...")
+
+        for x in controldf.collect():
+            filename = x['FileName']
+            filepath = x['FilePath']
+            folder = x['StgFolder']
+            grpName = x['GroupByColumn']
+            outfolder = x['OutFolderName']
+
+            corrupted_logs.logger.info("{} for {} path started creating the df respectively".format(filename, filepath))
+            corrupted_logs.logger.info(f"stage path: {filepath}")
+            
+            corrupted_logs.logger.info("next take out the schema from original dfs and add corrupted_records col to the schema....")
+
+            original_dfs = Spsession.read.format('csv').option('header', True).option('inferSchema', True).load(f'{filepath}{dt_string}').schema
+
+            new_schema = original_dfs.add(StructField('_corrupted_records', StringType()))
+
+            dfs = Spsession.read.format('csv').schema(new_schema).option("mode","PERMISSIVE").option("columnNameOfCorruptRecord", "_corrupted_records").option('Header', 'True').load(f'{filepath}{dt_string}')
+
+            corrupted_logs.logger.info("{} for {} path dataframe created..., Looking frwd".format(filename, filepath))
+
+            #display(dfs)
+            corrupted_logs.logger.info('Filter the corrupt_record and pass it to badrecord path')
+
+            corrupted_records = dfs.filter(col('_corrupted_records').isNotNull())
+
+            corrupted_records_count = corrupted_records.count()
+
+            corrupted_logs.logger.info(f'corrupted_records count for {filename}: {corrupted_records_count}')
+
+            non_corrupted_records = dfs.filter(col('_corrupted_records').isNull())
+
+            non_corrupted_records_count = non_corrupted_records.count()
+
+            corrupted_logs.logger.info(f"non corrupted_records count for {filename}:{non_corrupted_records_count}")
+
+            #non_corrupted_records.show()
+
+            if corrupted_records_count >=1:
+                corrupted_logs.logger.info('writing corrupted_records to bad path')
+                output_bad_path = f'dbfs:/mnt/raw/BadRecords/{filename}-CorruptedRecords/{dt_string}'
+                corrupted_records.coalesce(1).write.mode('overwrite').option("header", "true").parquet(output_bad_path)
+
+            else:
+                corrupted_logs.logger.info('No Bad records or corrupted records found from the source...')
+                corrupted_logs.logger.info(f'So writing {filename} to good path')
+                good_path = f"/mnt/raw/GoodRecords/{outfolder}/{dt_string}"
+                cleaned_records = non_corrupted_records.drop('_corrupted_records')
+                                                             
+                cleaned_records.coalesce(1).write.mode('overwrite').option("header", "true").parquet(good_path)
+
+
+    except Exception as e:
+        corrupted_logs.logger.error(f"An error occurred while processing CorruptedRecords:: {str(e)}")
+        raise e
+
+
+
+================================================================ fnControlNoteBook or fnMainNoteBook ============================================================
+
+-- This notebook act like a driver class for us. Here we will call all the functional Notebooks in order to execute a single notebook activity in ADF Pipeline
+
+%run /validation/fnCorruptedRecords
+
+%run /validation/fnColumnComparisionSrcandStg
+
+%run /validation/fnSchemaComparisionSrcandStg 
+
+
+%run /validation/fnDateFormatCheck
+
+%run /validation/fnCheckForNulls
+
+%run /validation/fnCheckForDuplicates
+
+===============================================================================================================================================================================================
+
