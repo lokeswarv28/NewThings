@@ -323,6 +323,77 @@ def column_comparision(controldf, sparksession, referencedf):
 
 column_comparision(controldf= control_df, sparksession = Spark_session, referencedf= reference_df)
 
+====================================================== fnColumnOrderComparision ===========================================================
+
+#Columns Order comparision
+def column_OrderComparision(controldf, sparksession, referencedf):
+    """
+    controldf : is a control dataframe where parameters are defined
+    sparksession : ref to spark session which is using for this notebook
+    referencdf : reference_df 
+    """
+    try:
+
+        #getting the fileName, filePath to creates the dataframes respectively 
+        mylogs_Order.logger.info("getting the fileName, filePath to creates the dataframes respectively ")
+        for row in controldf.collect():
+
+            filename = row['FileName']
+            filepath = row['FilePath']
+            
+            outfolder = row['OutFolderName']
+            
+            #refpath = row['RefFilePath']
+
+            full_path = filepath + dt_string
+
+            mylogs_Order.logger.info(f'full_path for {filename} is {full_path}')
+
+            mylogs_Order.logger.warning("{} for {} path started creating the df respectively".format(filename, filepath))
+
+            dfs = sparksession.read.format('csv').option('header', True).option('inferSchema', True).load(full_path)
+
+            display(dfs)
+
+            mylogs_Order.logger.warning("{} for {} path dataframe created..., Looking frwd".format(filename, filepath))
+
+            dfs_columns = list(set(map(str.lower, dfs.columns)))
+            #print(dfs_columns)
+
+            mylogs_Order.logger.info(f'dfs_columns Postions for {filename} is: {dfs_columns}')
+
+            ref_filter = referencedf.filter(col('SrcFileName') == filename)
+
+            ref_columns = list(set(map(str.lower, ref_filter.select('SrcColumns').rdd.flatMap(lambda x:x).collect())))
+
+            mylogs_Order.logger.info(f'Ref_columns Postions for {filename} is : {ref_columns}')
+
+            mylogs_Order.logger.info(f"Compare column orders..either all are in same order are not for {filename}")
+
+            
+            if dfs_columns == ref_columns:
+                mylogs_Order.logger.info(f'in same order only for{filename}')
+
+                output_good_path = f"/mnt/raw/GoodRecords/{outfolder}/{dt_string}"
+                
+                dfs.coalesce(1).write.mode('overwrite').option("header", "true").parquet(output_good_path)
+
+                mylogs_Order.logger.info("successfully written ... to {}".format(output_good_path))
+                
+
+            else:
+                mylogs_Order.logger.info(f'Columns positions are not matched for:{filename}')
+                error_message = "Column orders don't match for {} and got columns positions like these : {}".format(filename, dfs_columns)
+
+                mylogs_Order.logger.error(error_message)
+
+                raise ValueError(error_message)
+
+        
+    except Exception as e:
+        mylogs_Order.logger.error(f"An error occurred: {str(e)}")
+        raise e
+
 ======================================================= fnSchemaComparision ===================================================================
 
 -- In this notebook we will compare schema of actual dfs and reference df. If missmatch raise error else write to goodpath (raw)
