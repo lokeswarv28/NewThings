@@ -822,7 +822,69 @@ def CorruptedRecords(controldf, Spsession):
         corrupted_logs.logger.error(f"An error occurred while processing CorruptedRecords:: {str(e)}")
         raise e
 
+=================================================================fnCheckForUnwantedRecords=============================================
+# checkforunexpectedRecords column
 
+def CheckForUnExpectedRecords(controldf, spsession):
+    try:
+        unexp_logs.logger.info('CheckForUnExpectedRecords function started....')
+
+        for row in controldf.collect():
+            filename = row['FileName']
+            filepath = row['FilePath']
+            
+            outfolder = row['OutFolderName']
+
+            full_path = filepath + dt_string
+
+            unexp_logs.logger.info(f'Here is the full_path of file {filename} : {full_path} in Stage')
+
+            dfs = spsession.read.format('csv').option('Header', 'True').option('inferSchema', 'True').load(full_path)
+
+            unexp_logs.logger.info(f'dataframe is created for the {filename}.. looking frwd')
+
+            unexp_logs.logger.info('Define a regex those not to be allowed..')
+
+            not_allowed_pattern = r"\$|#|&|NA|\*"
+
+            unexp_logs.logger.info('Define a condition that look over each records w.r.to rgex pattern..')
+
+            condition = [col(c).rlike(not_allowed_pattern) for c in dfs.columns]
+
+            overall_condition = reduce(lambda x,y : x | y, condition)
+
+            unexp_logs.logger.info('created a new_column to the dfs called unexp_records.. which holds that condition')
+
+            df2 =  dfs.withColumn('unexp_records', overall_condition)
+
+            unexp_logs.logger.info('create a unwanted_df which holds unwanted records')
+
+            unwanted_df = df2.filter(col('unexp_records') == True)
+
+            unwanted_df_count = unwanted_df.count()
+
+            cleaned_df = df2.filter(col('unexp_records') == False)
+
+            cleaned_df_count = cleaned_df.count()
+
+            if unwanted_df_count > 0:
+                unexp_logs.logger.info(f'count of unwanted_df_count are : {unwanted_df_count}')
+                output_bad_path = f'dbfs:/mnt/raw/BadRecords/{filename}-UnWantedRecords/{dt_string}'
+                unexp_logs.logger.info(f'Found the unwanted writing to the BadRecords path {output_bad_path}')
+                unwanted_df.coalesce(1).write.mode('overwrite').option("header", "true").parquet(output_bad_path)
+                unexp_logs.logger.info(f"successfully written for a filename: {filename} ")
+
+            else:
+                unexp_logs.logger.info(f'count of cleaned_df_count are : {cleaned_df_count}')
+                unexp_logs.logger.info(f'No UnWantedRecords found in a file {filename}')    
+                output_good_path = f"/mnt/raw/GoodRecords/{outfolder}/{dt_string}"
+                unexp_logs.logger.info(f'writing to the GoodRecords path {output_good_path}')
+                cleaned_df.coalesce(1).write.mode('overwrite').option("header", "true").parquet(output_good_path)
+                unexp_logs.logger.info(f"successfully written for a filename: {filename} ")
+ 
+
+    except Exception as e:
+        unexp_logs.logger.error(f'An error occured while processing CheckForUnExpectedRecords::{str(e)}')
 
 ================================================================ fnControlNoteBook or fnMainNoteBook ============================================================
 
