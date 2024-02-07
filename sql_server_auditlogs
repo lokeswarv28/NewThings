@@ -1,0 +1,134 @@
+CREATE TABLE AuditLog
+(
+    AuditID INT IDENTITY(1,1) PRIMARY KEY,
+    TableName VARCHAR(255),
+    InsertedRecordsCount INT,
+    UpdatedRecordsCount INT,
+    UpdatedDate DATETIME NULL,
+    InsertedDate DATETIME NULL
+);
+
+select * from AuditLog;
+
+CREATE PROCEDURE sp_LogAudit 
+    @TableName VARCHAR(255), 
+    @InsertedRecordsCount INT = 0, 
+    @UpdatedRecordsCount INT = 0
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    DECLARE @CurrentTime DATETIME = GETDATE();
+    
+    INSERT INTO AuditLog (TableName, InsertedRecordsCount, UpdatedRecordsCount, UpdatedDate, InsertedDate)
+    VALUES (
+        @TableName, 
+        @InsertedRecordsCount, 
+        @UpdatedRecordsCount, 
+        CASE WHEN @UpdatedRecordsCount > 0 THEN @CurrentTime END, 
+        CASE WHEN @InsertedRecordsCount > 0 THEN @CurrentTime END
+    );
+END;
+
+
+
+-- -------------------------- in another file -------------------------------------------------
+DECLARE @UpdatedRowCount INT;
+DECLARE @InsertedRowCount INT;
+DECLARE @sql NVARCHAR(MAX);
+
+-- Update records
+WITH SourceData2 AS (
+    SELECT
+        stg.Customer_Id AS join_key,
+        MAX(stg.MEMBER_NAME) AS MemberName,
+        MAX(stg.DATE_OF_BIRTH) AS DOB,
+        MAX(stg.Age) AS Age
+    FROM stg.Loan stg
+    GROUP BY stg.Customer_Id
+
+    UNION ALL
+
+    SELECT
+        NULL,
+        stg.MEMBER_NAME,
+        stg.DATE_OF_BIRTH,
+        stg.Age
+    FROM stg.Loan stg
+    JOIN Dim.DimCustomer tgt ON
+        tgt.Customer_Id = stg.Customer_Id
+        AND tgt.Member_Name <> stg.Member_Name
+        AND tgt.Eff_EndDate IS NULL
+)
+
+UPDATE a
+SET Eff_EndDate = GETDATE()
+FROM Dim.DimCustomer a
+INNER JOIN SourceData2 b ON a.Customer_Id = b.join_key
+WHERE (a.Member_Name <> b.MemberName 
+        OR a.Date_of_birth <> b.DOB
+        OR a.Age <> b.Age)
+      AND a.Eff_EndDate = CAST('9999-12-31' AS DATE);
+
+-- Capture the number of Updated records ;
+SET @UpdatedRowCount = @@ROWCOUNT;
+
+-- Insert new records
+WITH SourceDataI AS (
+    SELECT
+        stg.Customer_Id AS join_key,
+        MAX(stg.MEMBER_NAME) AS MemberName,
+        MAX(stg.DATE_OF_BIRTH) AS DOB,
+        MAX(stg.Age) AS Age
+    FROM stg.Loan stg
+    GROUP BY stg.Customer_Id
+
+    UNION ALL
+
+    SELECT
+        NULL,
+        stg.MEMBER_NAME,
+        stg.DATE_OF_BIRTH,
+        stg.Age
+    FROM stg.Loan stg
+    JOIN Dim.DimCustomer tgt ON
+        tgt.Customer_Id = stg.Customer_Id
+        AND tgt.Member_Name <> stg.Member_Name
+        AND tgt.Eff_EndDate IS NULL
+)
+
+INSERT INTO Dim.DimCustomer (Customer_Id, Member_Name, Date_of_birth, Age, Eff_StartDate, eff_enddate)
+SELECT join_key, MemberName, DOB, Age, GETDATE(), CAST('9999-12-31' AS DATE)
+FROM SourceDataI s
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM dim.DimCustomer AS t
+    WHERE t.Customer_id = s.join_key
+        AND t.Eff_EndDate = CAST('9999/12/31 00:00:00' AS DATE)
+        AND (t.Member_name = s.MemberName)
+);
+
+-- Capture the number of inserted rows
+SET @InsertedRowCount = @@ROWCOUNT;
+PRINT @InsertedRowCount;
+
+EXEC sp_LogAudit 
+    @TableName = 'DimCustomer', 
+    @InsertedRecordsCount = @InsertedRowCount, 
+    @UpdatedRecordsCount = @UpdatedRowCount;
+
+-- truncate table dim.DimCustomer;
+select * from dim.DimCustomer;
+---- Construct the SQL string
+--SET @sql = N'EXEC sp_LogAudit @TableName = ''DimCustomer'', @InsertedRecordsCount = ' + CAST(@InsertedRowCount AS NVARCHAR(50)) + ', @UpdatedRecordsCount = ' + CAST(@UpdatedRowCount AS NVARCHAR(50)) + ';';
+
+---- Execute the dynamic SQL
+--EXEC sp_executesql @sql;
+
+
+-- --------------------- auditlogs output ----------------------------------------------------------------------------------------------------------------------------------------------------
+AuditID	TableName	InsertedRecordsCount	UpdatedRecordsCount	UpdatedDate	InsertedDate
+1	    DimCustomer	          0				                0			        NULL	    NULL
+2	DimCustomer	              0				                0			        NULL	    NULL
+3	DimCustomer	              0				                0			        NULL	    NULL
+4	DimCustomer	              10				              0			        NULL	    2024-02-07 09:44:09.503
