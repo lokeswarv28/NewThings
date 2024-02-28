@@ -26,6 +26,25 @@ insert into Dev.StgEmployees (EmployeeId,EmployeeFirstName, EmployeeLastName, DO
 values (101,'lokeswar', 'valluru', '29-12-1998', 'M', 'Proddatur'),
 (102,'Manikantha', 'Badireddy', '31-12-1998', 'M', 'Kakinada'),
 (103, 'Priyanka', 'Banoth', '02-10-1996', 'F', 'Khamam');
+
+--- -------------------------------------- Final -------------------------------------------------------------------
+
+merge into dev.DimEmployees t
+
+using (
+
+	select EmployeeId as join_key, * from dev.StgEmployees 
+
+	union all 
+
+	select null as Join_key , stg.* from dev.StgEmployees stg join dev.DimEmployees b on b.EmployeeId = stg.EmployeeId and b.EmployeeLastName != stg.EmployeeLastName
+
+)b 
+on t.EmployeeId = b.join_key 
+when matched and b.EmployeeLastName != t.EmployeeLastName then
+update set t.EffEndDate = getdate()
+when not matched then Insert (EmployeeId, EmployeeFirstName, EmployeeLastName, DOB, Gender, City, EffStartDate, EffEndDate) values 
+(EmployeeId, EmployeeFirstName, EmployeeLastName, DOB, Gender, City, getdate(), null);
 -- -------------------------- with Merge it works well and good ------------------------------------------------------
 
 SELECT stg.EmployeeId, stg.EmployeeFirstName, stg.EmployeeLastName, stg.DOB, stg.Gender, stg.City
