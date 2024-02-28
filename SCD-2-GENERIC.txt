@@ -29,22 +29,28 @@ values (101,'lokeswar', 'valluru', '29-12-1998', 'M', 'Proddatur'),
 
 --- -------------------------------------- Final -------------------------------------------------------------------
 
-merge into dev.DimEmployees t
-
+merge into dev.DimEmployees 
 using (
 
-	select EmployeeId as join_key, * from dev.StgEmployees 
+	select stg.EmployeeId as join_key, stg.* from dev.StgEmployees stg
 
-	union all 
+	union 
 
-	select null as Join_key , stg.* from dev.StgEmployees stg join dev.DimEmployees b on b.EmployeeId = stg.EmployeeId and b.EmployeeLastName != stg.EmployeeLastName
+	select null as join_key, stg.* from dev.StgEmployees stg 
 
-)b 
-on t.EmployeeId = b.join_key 
-when matched and b.EmployeeLastName != t.EmployeeLastName then
-update set t.EffEndDate = getdate()
-when not matched then Insert (EmployeeId, EmployeeFirstName, EmployeeLastName, DOB, Gender, City, EffStartDate, EffEndDate) values 
-(EmployeeId, EmployeeFirstName, EmployeeLastName, DOB, Gender, City, getdate(), null);
+	join dev.DimEmployees on stg.EmployeeId = dev.DimEmployees.EmployeeId where dev.DimEmployees.EffEndDate is null and (stg.EmployeeLastName <> dev.DimEmployees.EmployeeLastName)
+
+
+)x 
+
+on dev.DimEmployees.EmployeeId = join_key
+
+when matched and x.EmployeeLastName <> dev.DimEmployees.EmployeeLastName then 
+update set EffEndDate = getdate()
+
+when not matched then insert (EmployeeId, EmployeeFirstName, EmployeeLastName, DOB, Gender, City, EffStartDate, EffEndDate) values 
+(x.EmployeeId, x.EmployeeFirstName, x.EmployeeLastName, x.DOB, x.Gender, x.City, getdate(), null);
+
 -- -------------------------- with Merge it works well and good ------------------------------------------------------
 
 SELECT stg.EmployeeId, stg.EmployeeFirstName, stg.EmployeeLastName, stg.DOB, stg.Gender, stg.City
