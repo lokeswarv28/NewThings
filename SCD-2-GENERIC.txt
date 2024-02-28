@@ -51,52 +51,6 @@ update set EffEndDate = getdate()
 when not matched then insert (EmployeeId, EmployeeFirstName, EmployeeLastName, DOB, Gender, City, EffStartDate, EffEndDate) values 
 (x.EmployeeId, x.EmployeeFirstName, x.EmployeeLastName, x.DOB, x.Gender, x.City, getdate(), null);
 
--- -------------------------- with Merge it works well and good ------------------------------------------------------
-
-SELECT stg.EmployeeId, stg.EmployeeFirstName, stg.EmployeeLastName, stg.DOB, stg.Gender, stg.City
-    FROM dev.StgEmployees stg
-    WHERE NOT EXISTS (
-       
-        SELECT 1
-        FROM dev.DimEmployees d
-        WHERE d.EmployeeId = stg.EmployeeId
-        AND d.EmployeeLastName = stg.EmployeeLastName
-        AND d.City = stg.City
-        AND d.EffEndDate = cast('9999-12-31' as date)
-    )
-
--- this code tells you : 
-/*
-selects records from the dev.StgEmployees staging table with the condition that there are no corresponding records in the dev.DimEmployees dimension table that 
-match on several criteria: EmployeeId, EmployeeLastName, and City, and where the EffEndDate is NULL. The NULL in EffEndDate typically signifies that a record is currently active or valid 
-where not exists filter out records which are not mathces with dim from stg
-
-*/
-
--- --------------------------------------------------------------------------------------------------------
-MERGE INTO dev.DimEmployees AS target
-USING (
-
-    SELECT stg.EmployeeId, stg.EmployeeFirstName, stg.EmployeeLastName, stg.DOB, stg.Gender, stg.City
-    FROM dev.StgEmployees stg
-    WHERE NOT EXISTS (
-   
-        SELECT 1
-        FROM dev.DimEmployees d
-        WHERE d.EmployeeId = stg.EmployeeId
-        AND d.EmployeeLastName = stg.EmployeeLastName
-        AND d.City = stg.City
-        AND d.EffEndDate IS NULL
-    )
-) AS source (EmployeeId, EmployeeFirstName, EmployeeLastName, DOB, Gender, City)
-ON target.EmployeeId = source.EmployeeId AND target.EffEndDate IS NULL
-WHEN MATCHED THEN
-    UPDATE SET EffEndDate = GETDATE() 
-WHEN NOT MATCHED THEN
-    INSERT (EmployeeId, EmployeeFirstName, EmployeeLastName, DOB, Gender, City, EffStartDate, EffEndDate)
-    VALUES (source.EmployeeId, source.EmployeeFirstName, source.EmployeeLastName, source.DOB, source.Gender, source.City, GETDATE(), null);
-
-
 
 -- ------------------------------------------------------------------------------------------------------------------------
 create table dev.TControlSCD(
