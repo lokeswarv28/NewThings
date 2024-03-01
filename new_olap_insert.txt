@@ -1,3 +1,4 @@
+@concat(item().destination_folder, '/', 'year=', utcNow('yyyy'), '/', 'Month=', utcNow('MM'), '/', 'day=', utcNow('dd'))
 
 FileName : fnDataModelCreationJournal 
 =============================Dim and Facts Creation ==========================
