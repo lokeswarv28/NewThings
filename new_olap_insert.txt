@@ -1,4 +1,3 @@
-@concat(item().destination_folder, '/', 'year=', utcNow('yyyy'), '/', 'Month=', utcNow('MM'), '/', 'day=', utcNow('dd'))
 
 FileName : fnDataModelCreationJournal 
 =============================Dim and Facts Creation ==========================
@@ -144,55 +143,64 @@ set EmployeeFirstName = concat(upper(substring(EmployeeFirstName,1,1)), lower(su
 
 
 =======================================================DimProject==========================================================
-Insert into DMA.DimProject (ProjectName)
-select Distinct 
-Replace(SUBSTRING(Updates, 1, CHARINDEX('Update', Updates) - 1),'Service', '') AS ServiceValue
-from DMA.StgReports
-where Updates like 'Service%' and not exists 
-(select * from DMA.DimProject where ProjectName = Replace(SUBSTRING(Updates, 1, CHARINDEX('Update', Updates) - 1),'Service', '')
-);
+INSERT INTO DMA.DimProject(ProjectName)
+SELECT DISTINCT
+    Replace (Replace(Replace(REPLACE(SUBSTRING(Updates, 1, CHARINDEX('Update', Updates) - 3), 'Service', ''), CHAR(13),''), CHAR(10), ''), CHAR(9), '') AS ProjectName
+FROM DMA.StgReports
+WHERE Updates LIKE 'Service%'
+  AND NOT EXISTS (
+    SELECT *
+    FROM DMA.DimProject
+    WHERE ProjectName = Replace (Replace(Replace(REPLACE(SUBSTRING(Updates, 1, CHARINDEX('Update', Updates) - 3), 'Service', ''), CHAR(13),''), CHAR(10), ''), CHAR(9), '')
+  );
+
+
 
 ====================================================DimServices=================================================================
-Insert into DMA.DimService(RagName)
-select Distinct
-SUBSTRING(Updates, CHARINDEX('Service Health RAG', Updates) + LEN('Service Health RAG') + 1, LEN(Updates)) AS ServiceValue
-from DMA.StgReports
-where Updates like 'Service%'And CHARINDEX('Service Health RAG', Updates) > 0 AND NOT EXISTS (
-  SELECT * FROM DMA.DimService
-  WHERE RagName = SUBSTRING(Updates, CHARINDEX('Service Health RAG', Updates) + LEN('Service Health RAG') + 1, LEN(Updates))
-)
+INSERT INTO DMA.DimRag (RagName)
+SELECT DISTINCT
+    CASE 
+        WHEN CHARINDEX('Service Health RAG', Updates) > 0 THEN
+            CASE 
+                WHEN SUBSTRING(Updates, CHARINDEX('Service Health RAG', Updates) + LEN('Service Health RAG') + 1, LEN(Updates)) = '' THEN 'unknown'
+                ELSE SUBSTRING(Updates, CHARINDEX('Service Health RAG', Updates) + LEN('Service Health RAG') + 1, LEN(Updates))
+            END
+        ELSE 'unknown'
+    END AS ServiceValue
+FROM DMA.StgReports
+WHERE Updates LIKE 'Service%' 
+AND NOT EXISTS (
+    SELECT 1 
+    FROM DMA.DimRag
+    WHERE RagName = CASE 
+                        WHEN CHARINDEX('Service Health RAG', Updates) > 0 THEN 
+                            CASE 
+                                WHEN SUBSTRING(Updates, CHARINDEX('Service Health RAG', Updates) + LEN('Service Health RAG') + 1, LEN(Updates)) = '' THEN 'unknown'
+                                ELSE SUBSTRING(Updates, CHARINDEX('Service Health RAG', Updates) + LEN('Service Health RAG') + 1, LEN(Updates))
+                            END
+                        ELSE 'unknown'
+                    END
+);
+
+
+-- ----------------------------------- Update RAG -----------------------------------------
+
+UPDATE DMA.DimRag
+SET Description = case 
+				  when RagName = 'Green' then 'Good, expectations are being met.'
+				  when RagName = 'Amber' then 'Requires improvement, expectations not being met.'
+				  else Description
+				  END;
+
+-- Insert new records manually into RAG ------
+INSERT INTO DMA.DimRag(RagName, Description)
+SELECT 'Red', 'Poor, requires intervention'
+WHERE NOT EXISTS (SELECT 1 FROM DMA.DimRag WHERE RagName = 'Red');
+
 
 ===========================================================FactReports==========================================================
-INSERT INTO DMA.FactReports (Updates, SubmittedTime, DDateKey, DProjectId, DEmployeesId, ViewersID, DServiceKey)
-SELECT DISTINCT
-    REPLACE(REPLACE(REPLACE(REPLACE(
-        SUBSTRING(Updates, CHARINDEX('Update', Updates) + LEN('Update') + 1,
-            CHARINDEX('Service Health RAG', Updates) - CHARINDEX('Update', Updates) - LEN('Update') - 1
-        ), '<div>', ''), '</div>', ''), '<br>', ''), '&nbsp;', '') AS ServiceValue,
-    stg.SubmittedTime,
-    dd.DateKey,
-    dp.Id AS DProjectId,
-    de.EmployeeId AS DEmployeesId,
-    dv.EmployeeId AS ViewersID,
-    ds.ServiceId AS DServiceKey
-FROM
-    DMA.StgReports stg
-JOIN DMA.DimDate dd ON convert(date, stg.SubmittedTime) = dd.Date
-JOIN DMA.DimProject dp ON REPLACE(SUBSTRING(stg.Updates, 1, CHARINDEX('Update', stg.Updates) - 1), 'Service', '') = dp.ProjectName
-JOIN DMA.DimEmployees de ON stg.EmployeeEmail = de.EmployeeEmail 
-JOIN DMA.DimEmployees dv ON stg.ViewEmail = dv.EmployeeEmail 
-JOIN DMA.DimService ds ON SUBSTRING(stg.Updates, CHARINDEX('Service Health RAG', stg.Updates) + LEN('Service Health RAG') + 1, LEN(stg.Updates)) = ds.RagName 
-WHERE
-    stg.Updates LIKE 'Service%' and NOT EXISTS (select 1 from DMA.FactReports tf where tf.Updates = REPLACE(REPLACE(REPLACE(REPLACE(
-        SUBSTRING(stg.Updates,
-            CHARINDEX('Update', stg.Updates) + LEN('Update') + 1,
-            CHARINDEX('Service Health RAG', stg.Updates) - CHARINDEX('Update', stg.Updates) - LEN('Update') - 1
-        ), '<div>', ''), '</div>', ''), '<br>', ''), '&nbsp;', '')
-    AND tf.SubmittedTime = stg.SubmittedTime);
-
-=============================================================================== or ==========================================================================
-INSERT INTO #tempF (Updates, SubmittedTime, Fk_DateKey, Fk_ProjectId, Fk_EmployeesId, Fk_ViewersID, Fk_ServiceKey)
-SELECT Distinct  Replace (Replace (Replace(Replace(Replace(Replace(REPLACE(REPLACE(REPLACE(REPLACE(
+INSERT INTO DMA.FactReports (Updates, SubmittedTime,UpdatesRichText, Fk_DateKey, Fk_ProjectId, Fk_EmployeesId, Fk_ViewersID, Fk_ServiceKey)
+SELECT Distinct Replace( Replace (Replace( Replace (Replace( Replace( Replace( Replace (Replace (Replace(Replace(Replace(Replace(REPLACE(REPLACE(REPLACE(REPLACE(
     SUBSTRING(
         stg.Updates,
         CHARINDEX('Update', stg.Updates) + LEN('Update') + 1,
@@ -201,23 +209,31 @@ SELECT Distinct  Replace (Replace (Replace(Replace(Replace(Replace(REPLACE(REPLA
             THEN CHARINDEX('Service Health RAG', stg.Updates) - CHARINDEX('Update', stg.Updates) - LEN('Update') - 1
             ELSE LEN(stg.Updates)
         END
-    ), '<div>', ''), '</div>', ''), '<br>', ''), '&nbsp;', ''), '<ul>', ' '), '</li>', ''), '</ul>',''),'<li style="list-style-type: disc">', ' '),'<ul style="list-style-type: circle">', ' ' ), '<li style="">', ' ')
+    ), '<div>', ''), '</div>', ''), '<br>', ''), '&nbsp;', ''), '<ul>', ' '), '</li>', ''), '</ul>',''),'<li style="list-style-type: disc">', ' '),'<ul style="list-style-type: circle">', ' ' ), '<li style="">', ' '), '<ol>', ' '), '<li>', ' '), '<span>', ' '), '</span>', ' '), '<b>', ''), '</b>', ''), '</ol>', '')
  AS ServiceValue,
     stg.SubmittedTime,
+    stg.Updates as UpdatesRichText  ,
     dd.Pk_DateKey as Fk_DateKey,
     dp.Pk_ProjectId AS Fk_ProjectId,
     de.Pk_EmployeeId AS Fk_EmployeesId,
     dv.Pk_EmployeeId AS Fk_ViewersID,
     ds.Pk_ServiceId AS Fk_ServiceKey
 FROM
-    #temp stg
+    DMA.StgReports stg
 JOIN DMA.DimDate dd ON convert(date, stg.SubmittedTime) = dd.Date
-JOIN DMA.DimProject dp ON REPLACE(SUBSTRING(stg.Updates, 1, CHARINDEX('Update', stg.Updates) - 1), 'Service', '') = dp.ProjectName
+JOIN DMA.DimProject dp ON Replace(Replace(Replace(REPLACE(SUBSTRING(stg.Updates, 1, CHARINDEX('Update', stg.Updates) - 3), 'Service', ''),Char(13),''),Char(10),''),Char(9),'') = dp.ProjectName
 JOIN DMA.DimEmployee de ON stg.EmployeeEmail = de.EmployeeEmail 
 JOIN DMA.DimEmployee dv ON stg.ViewEmail = dv.EmployeeEmail 
-JOIN DMA.DimRag ds ON SUBSTRING(stg.Updates, CHARINDEX('Service Health RAG', stg.Updates) + LEN('Service Health RAG') + 1, LEN(stg.Updates)) = ds.RagName 
+JOIN DMA.DimRag ds on  CASE 
+        WHEN CHARINDEX('Service Health RAG', stg.Updates) > 0 THEN
+            CASE 
+                WHEN SUBSTRING(stg.Updates, CHARINDEX('Service Health RAG', stg.Updates) + LEN('Service Health RAG') + 1, LEN(stg.Updates)) = '' THEN 'unknown'
+                ELSE SUBSTRING(stg.Updates, CHARINDEX('Service Health RAG', stg.Updates) + LEN('Service Health RAG') + 1, LEN(stg.Updates))
+            END
+        ELSE 'unknown'
+    END = ds.RagName
 WHERE
-    stg.Updates LIKE 'Service%' and NOT EXISTS (select 1 from #tempF tf where tf.Updates =  Replace (Replace (Replace(Replace(Replace(Replace(REPLACE(REPLACE(REPLACE(REPLACE(
+    stg.Updates LIKE 'Service%' and NOT EXISTS (select 1 from DMA.FactReports tf where tf.Updates =  Replace( Replace (Replace( Replace (Replace( Replace( Replace( Replace (Replace (Replace(Replace(Replace(Replace(REPLACE(REPLACE(REPLACE(REPLACE(
     SUBSTRING(
         stg.Updates,
         CHARINDEX('Update', stg.Updates) + LEN('Update') + 1,
@@ -226,7 +242,6 @@ WHERE
             THEN CHARINDEX('Service Health RAG', stg.Updates) - CHARINDEX('Update', stg.Updates) - LEN('Update') - 1
             ELSE LEN(stg.Updates)
         END
-    ), '<div>', ''), '</div>', ''), '<br>', ''), '&nbsp;', ''), '<ul>', ' '), '</li>', ''), '</ul>',''),'<li style="list-style-type: disc">', ' '),'<ul style="list-style-type: circle">', ' ' ), '<li style="">', ' ')
-
+    ), '<div>', ''), '</div>', ''), '<br>', ''), '&nbsp;', ''), '<ul>', ' '), '</li>', ''), '</ul>',''),'<li style="list-style-type: disc">', ' '),'<ul style="list-style-type: circle">', ' ' ), '<li style="">', ' '), '<ol>', ' '), '<li>', ' '), '<span>', ' '), '</span>', ' '), '<b>', ''), '</b>', ''), '</ol>', '')
+ 
     AND tf.SubmittedTime = stg.SubmittedTime) order by SubmittedTime desc;
-
