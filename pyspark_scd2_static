@@ -1,0 +1,116 @@
+from pyspark.sql.functions import *
+from pyspark.sql.types import * 
+
+# dbutils.fs.ls('/user/hive/warehouse/')
+
+try:
+    dir_path = dbutils.fs.ls('/user/hive/warehouse/dev.db')
+
+    if dir_path:
+        print('Presented and trying to remove')
+
+        dbutils.fs.rm('dbfs:/user/hive/warehouse/dev.db/', True)
+
+        print('removed')
+
+    else : 
+        print("An empty dir found, please check the path")
+
+except Exception as e:
+    print(f"An error occured while processing this code : {str(e)}")
+
+
+%sql
+
+create schema if not exists dev;
+
+%sql
+
+create  table if not exists dev.DimEmployees2 (
+  employee_key BIGINT GENERATED ALWAYS AS IDENTITY,
+  employee_id int ,
+  employee_fname string , 
+  employee_lname string,
+  city string,
+  eff_startdate timestamp,
+  eff_enddate timestamp
+
+);
+
+
+def fn_scd2(path):
+    try:
+        
+        print('Reading the source file...')
+
+        stg_df = spark.read.format('csv').option('Header', 'True').option('inferSchema', 'True').load(path)
+
+        print(f"done with read the stg_df with count of: {stg_df.count()} ")
+
+        dim_df = spark.sql(""" select * from dev.DimEmployees2 """)
+
+        print('writing code to update the eff_end for the updated records in the dim_df')
+
+        update_df = dim_df.join(
+                        stg_df,
+                        dim_df.employee_id == stg_df.employee_id,
+                        'inner'
+                    ).filter(
+                        (dim_df.employee_lname != stg_df.employee_lname) |
+                        (dim_df.city != stg_df.city)
+                    ).filter(
+                        dim_df.eff_enddate == '9999-12-31'
+                    ).select(
+                        dim_df['*']
+                    ).withColumn(
+                        'eff_enddate',
+                        current_date()
+                    )
+
+        print(f"eff_endDate updated successfully...for the records{update_df.count()}")
+
+        updated_records_df = stg_df.join(update_df, 'employee_id', 'inner').select(update_df['*'])
+
+        # updated_records_df.show()
+
+        print("Now lets find out New records from stg_df")
+
+        compared_df = stg_df.join(dim_df,  dim_df.employee_id == stg_df.employee_id, 'left_anti') \
+                      .select(
+                                stg_df['*'],
+                                current_date().alias('eff_startdate'),
+                                lit('9999-12-31').alias('eff_enddate')
+                            )
+                      
+        print(f"The number of new records found :: {compared_df.count()}")
+
+        print("adding columns to compared_df , if not their in dim_df..")
+
+        for col in [col.lower() for col in dim_df.columns if col not in compared_df.columns]:
+            compared_df = compared_df.withColumn(col, lit(None))
+
+        print("changing the Data type of eff_enddate to TimeStamp in order to merge into table ")
+
+        compared_df = compared_df.withColumn('eff_enddate', to_timestamp('eff_enddate'))
+
+        print('Now combine updated_df with update_records_df....')
+
+        merge_up = update_df.unionByName(updated_records_df)
+
+        merge_df = merge_up.unionByName(compared_df)
+
+        final_merge = merge_df.select('employee_id', 'employee_fname', 'employee_lname', 'city', 'eff_startdate', 'eff_enddate')
+
+        print(f"writing final_merge dataframe records of {final_merge.count()} into Table ")
+
+        final_merge.write.mode('append').saveAsTable('dev.DimEmployees2')
+
+    except Exception as e:
+        print(f"An error occured while processing thie function :: {str(e)}")
+
+path = 'dbfs:/FileStore/employees_db-2.csv' 
+
+fn_scd2(path)
+
+%sql 
+select * from dev.dimemployees2;
