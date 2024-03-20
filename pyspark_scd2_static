@@ -134,54 +134,43 @@ except Exception as e:
 
 
 
-========================= ================================================= ====================================== ===========
+========================= ================================================= SCD1 ====================================== ===========
 
-from pyspark.sql.functions import col
 
-def fn_scd1(path):
-    try:
-        print('Reading the source file...')
-        stg_df = spark.read.format('csv').option('Header', 'True').option('inferSchema', 'True').load(path)
-        print(f"Done reading the stg_df with a count of: {stg_df.count()} ")
+create table if not exists gold.dimbrand2 (
+    brand_id Long GENERATED ALWAYS AS IDENTITY,
+    BrandName string,
+    Segment string
 
-        print('Reading the existing dimension table...')
-        dim_df = spark.sql("""SELECT * FROM dev.DimEmployees2""")
+);
 
-        # Identify records that have changed in the source file
-        changed_records_df = stg_df.join(
-            dim_df,
-            stg_df.employee_id == dim_df.employee_id,
-            'inner'
-        ).filter(
-            (dim_df.employee_lname != stg_df.employee_lname) |
-            (dim_df.city != stg_df.city)
-        )
+stg_df = spark.read.format('csv').option('Header', 'True').option('inferSchema', 'True').load('dbfs:/FileStore/barnd_file-6.csv')
 
-        print(f"Number of changed records: {changed_records_df.count()}")
+stg_df.show()
 
-        if changed_records_df.count() > 0:
-            print('Updating changed records in the dimension table...')
-            # Replace only the changed records in the dimension table
-            dim_df_updated = dim_df.alias('old').join(
-                changed_records_df.select(dim_df.columns).alias('new'),
-                on='employee_id',
-                how='left_outer'
-            ).select(
-                *[col('new.' + c) if c in stg_df.columns else col('old.' + c) for c in dim_df.columns]
-            )
-            
-            # Append the records that were not changed
-            unchanged_records_df = dim_df.join(changed_records_df, 'employee_id', 'left_anti')
-            final_dim_df = dim_df_updated.union(unchanged_records_df)
+dim_df = spark.sql("""SELECT * FROM  gold.dimbrand2 """)
 
-            final_dim_df.write.mode('overwrite').saveAsTable('dev.DimEmployees2')
-            print('SCD1 process completed successfully.')
-        else:
-            print('No records have changed. Exiting without updating.')
+# dim_df = dim_df.withColumn("tempKey", monotonically_increasing_id())
 
-    except Exception as e:
-        print(f"An error occurred while processing this function: {str(e)}")
+dim_df.show()
 
-# Example usage:
-fn_scd1("path_to_your_file.csv")
+print("check for new records...")
+
+new_records = stg_df.join(dim_df, 'BrandName', 'left_anti')
+new_records.show()
+
+updated_records = stg_df.join(dim_df, stg_df['BrandName'] == dim_df['BrandName'], 'inner').select(dim_df['*'])
+
+print("matching from src to target ")
+updated_records.show()
+
+combined_records = new_records.unionByName(updated_records.drop('brand_id'))
+
+print('combined....')
+
+combined_records.show()
+
+# new_records = new_records.drop('name_md5')
+
+combined_records.write.mode('overwrite').saveAsTable("gold.dimbrand2")
 
