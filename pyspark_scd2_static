@@ -114,3 +114,19 @@ fn_scd2(path)
 
 %sql 
 select * from dev.dimemployees2;
+
+
+try:
+    # Execute an SQL update statement to update end dates for records where employee_lname is not the same
+    spark.sql("""
+        UPDATE dev.DimEmployees2
+        SET eff_enddate = current_date()
+        WHERE employee_id IN (
+            SELECT employee_id FROM dev.DimEmployees2
+            WHERE employee_lname != (
+                SELECT employee_lname FROM stg_df WHERE stg_df.employee_id = DimEmployees2.employee_id
+            )
+        )
+    """)
+except Exception as e:
+    print(f"An error occurred while updating end dates :: {str(e)}")
