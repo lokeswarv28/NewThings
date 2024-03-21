@@ -1,0 +1,13 @@
+customer_id,customer_name,mobile,payment_type,store_id,employee_id,employee_fname,employee_lname,city,gender,order_id,quantity,price,Total_price
+1,Chelsie,500680694-X,card,103,1,Lilith,Milhench,Geputan,F,#e5d,2,81,162
+2,Sofia,914497546-5,card,101,2,Rory,Delia,Ban Pong,F,#920,1,104,104
+3,Hilliard,865990304-8,upi,101,3,Sheppard,Markova,Bouillon,M,#da9,10,90,900
+4,Philomena,907476084-8,upi,104,4,Andee,Lampens,Tacarigua,F,#6bb,10,120,1200
+5,Berrie,419264146-1,card,101,5,Gusella,Dackombe,Kepel,F,#e66,9,146,1314
+6,Leif,569896204-9,upi,102,6,Carlo,Form,Baro Kunda,M,#a6b,5,148,740
+7,Martelle,526107507-6,cash,104,7,Lory,Sneesby,Otan Aiyegbaju,F,#9c3,10,57,570
+8,Blane,233332122-9,cash,102,8,Anders,Klimko,Demak,M,#91b,10,32,320
+9,Bryanty,213007963-6,card,101,9,Kelley,Parnham,Ljubno ob Savinji,M,#f63,1,118,118
+10,Corissa,656048044-5,upi,101,10,Cinderella,Aven,newyork,F,#ef4,6,83,498
+11,ricky,911058022,card,102,1,Lilith,Milhench,Geputan,F,#opc,2,100,200
+12,ponting,787878878,cash,101,2,Rory,Delia,Ban Pong,F,#dosa,2,150,300
