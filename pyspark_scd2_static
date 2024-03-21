@@ -174,3 +174,30 @@ combined_records.show()
 
 combined_records.write.mode('overwrite').saveAsTable("gold.dimbrand2")
 
+
+=========================================================================================================================
+
+# Function to generate or load a DataFrame
+def generate_df():
+    # Your code to generate or load the DataFrame
+    # For example:
+    df = spark.createDataFrame([(1, 'Alice'), (2, 'Bob'), (3, 'Charlie')], ['id', 'name'])
+    return df
+
+# Function to operate on the DataFrame returned by generate_df()
+def process_df(df):
+    # Your code to process the DataFrame
+    # For example:
+    df_processed = df.withColumn('name_length', F.length(df['name']))
+    return df_processed
+
+# Call generate_df() to get the DataFrame
+df = generate_df()
+
+# Call process_df() with the returned DataFrame
+processed_df = process_df(df)
+
+# Display the processed DataFrame
+display(processed_df)
+
+
