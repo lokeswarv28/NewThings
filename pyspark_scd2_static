@@ -37,101 +37,140 @@ create  table if not exists dev.DimEmployees2 (
 
 );
 
+%sql
+CREATE table if not exists uat.DimModel(
+  pkModelId  LONG GENERATED ALWAYS AS IDENTITY,
+  ModelName STRING,
+  Segment STRING,
+  FuelCapacity STRING,
+  SeatCapacity STRING,
+  EngineCapacity STRING,
+  WheelerKey STRING,
+  Active_status STRING,
+  StartDate TIMESTAMP,
+  EndDate TIMESTAMP
+);
 
-def fn_scd2(path):
-    try:
-        
-        print('Reading the source file...')
+stg_df_1 = spark.read.format('csv').option('Header', 'True').option('inferSchema', 'True').load('dbfs:/FileStore/testing/2_test.csv').withColumn('FuelCapacity', lit(None))\
+           .withColumn('SeatCapacity', lit(None)).select(F.col('Model'), F.col('Segment'), F.col('EngineCapacity'), F.col('FuelCapacity'), F.col('SeatCapacity'), F.lit('T').alias("wheelerkey")).dropDuplicates(['Model', 'Segment', 'EngineCapacity'])
 
-        stg_df = spark.read.format('csv').option('Header', 'True').option('inferSchema', 'True').load(path)
-
-        print(f"done with read the stg_df with count of: {stg_df.count()} ")
-
-        dim_df = spark.sql(""" select * from dev.DimEmployees2 """)
-
-        print('writing code to update the eff_end for the updated records in the dim_df')
-
-        update_df = dim_df.join(
-                        stg_df,
-                        dim_df.employee_id == stg_df.employee_id,
-                        'inner'
-                    ).filter(
-                        (dim_df.employee_lname != stg_df.employee_lname) |
-                        (dim_df.city != stg_df.city)
-                    ).filter(
-                        dim_df.eff_enddate == '9999-12-31'
-                    ).select(
-                        dim_df['*']
-                    ).withColumn(
-                        'eff_enddate',
-                        current_date()
-                    )
-
-        print(f"eff_endDate updated successfully...for the records{update_df.count()}")
-
-        updated_records_df = stg_df.join(update_df, 'employee_id', 'inner').select(update_df['*'])
-
-        # updated_records_df.show()
-
-        print("Now lets find out New records from stg_df")
-
-        compared_df = stg_df.join(dim_df,  dim_df.employee_id == stg_df.employee_id, 'left_anti') \
-                      .select(
-                                stg_df['*'],
-                                current_date().alias('eff_startdate'),
-                                lit('9999-12-31').alias('eff_enddate')
-                            )
-                      
-        print(f"The number of new records found :: {compared_df.count()}")
-
-        print("adding columns to compared_df , if not their in dim_df..")
-
-        for col in [col.lower() for col in dim_df.columns if col not in compared_df.columns]:
-            compared_df = compared_df.withColumn(col, lit(None))
-
-        print("changing the Data type of eff_enddate to TimeStamp in order to merge into table ")
-
-        compared_df = compared_df.withColumn('eff_enddate', to_timestamp('eff_enddate'))
-
-        print('Now combine updated_df with update_records_df....')
-
-        merge_up = update_df.unionByName(updated_records_df)
-
-        merge_df = merge_up.unionByName(compared_df)
-
-        final_merge = merge_df.select('employee_id', 'employee_fname', 'employee_lname', 'city', 'eff_startdate', 'eff_enddate')
-
-        print(f"writing final_merge dataframe records of {final_merge.count()} into Table ")
-
-        final_merge.write.mode('append').saveAsTable('dev.DimEmployees2')
-
-    except Exception as e:
-        print(f"An error occured while processing thie function :: {str(e)}")
-
-path = 'dbfs:/FileStore/employees_db-2.csv' 
-
-fn_scd2(path)
-
-%sql 
-select * from dev.dimemployees2;
+stg_df_2 = spark.read.format('csv').option('Header', 'True').option('inferSchema', 'True').load('dbfs:/FileStore/testing/4_test.csv').select(F.col('Model'), F.col('Body Type').alias('Segment'), F.col('ENGINE').alias('EngineCapacity'), F.col('Fuel Capacity (L)').alias('FuelCapacity'), F.col('Seating Capacity').alias('SeatCapacity') , F.lit('F').alias("wheelerkey") ).dropDuplicates(['Model', 'Segment', 'EngineCapacity'])
 
 
-try:
-    # Execute an SQL update statement to update end dates for records where employee_lname is not the same
-    spark.sql("""
-        UPDATE dev.DimEmployees2
-        SET eff_enddate = current_date()
-        WHERE employee_id IN (
-            SELECT employee_id FROM dev.DimEmployees2
-            WHERE employee_lname != (
-                SELECT employee_lname FROM stg_df WHERE stg_df.employee_id = DimEmployees2.employee_id
-            )
-        )
-    """)
-except Exception as e:
-    print(f"An error occurred while updating end dates :: {str(e)}")
+print('stg_df_1 count:', stg_df_1.count())
+print('stg_df_2 count', stg_df_2.count())
 
 
+#dbfs:/FileStore/2-WheelSales/2_WheelSales.csv
+# print("Source_data")
+
+# stg_df = stg_df.dropDuplicates(['Model', 'Segment', 'EngineCapacity'])
+
+stg_df = stg_df_1.unionByName(stg_df_2)
+
+print('stg_df count:', stg_df.count())
+
+stg_df.show()
+
+stg_df = stg_df.withColumnRenamed("Model", "ModelName")
+
+print('read the table')
+
+dim_df = spark.sql('select * from uat.dimmodel')
+
+dim_df.show()
+
+print('Identify New Records: Not present in dim_df')
+
+new_records_df = stg_df.join(dim_df, ['ModelName'], "left_anti").select(stg_df['*'], F.current_date().alias('StartDate'), F.lit('9999-12-31').alias('EndDate'), F.lit(None).alias('pkmodelid'))
+
+print('new_records_df count', new_records_df.count())
+
+new_records_df.show()
+
+
+update_df = dim_df.join(stg_df, stg_df['ModelName'] == dim_df['ModelName'], 'inner') \
+            .filter((dim_df['EngineCapacity'] != stg_df['EngineCapacity']))\
+            .filter(dim_df['EndDate'] == '9999-12-31') \
+            .select(dim_df['*']).withColumn('EndDate', current_date()).dropDuplicates(['ModelName', 'Segment', 'EngineCapacity'])
+print('update_df')
+
+update_df.show()
+
+print("Identify Changed Records: Exists in dim_df but with different EngineCapacity ")
+
+updated_records_df = stg_df.join(
+    update_df.select("ModelName"),
+    stg_df['ModelName'] == dim_df['ModelName'],
+    how="inner"
+).select(
+    stg_df['*'],
+    F.current_date().alias("StartDate"),
+    F.lit("9999-12-31").alias("EndDate")
+).dropDuplicates(['ModelName', 'Segment', 'EngineCapacity'])
+
+print('updated_records_df count::', updated_records_df.count())
+
+# updated_records_df.show()
+
+for col in [col.lower() for col in dim_df.columns if col not in new_records_df.columns]:
+    new_df = new_records_df.withColumn(col, lit(None))
+
+for col in [col.lower() for col in dim_df.columns if col not in updated_records_df.columns]:
+    updated_records_df = updated_records_df.withColumn(col, lit(None))
+
+
+print("New_df display")
+new_df.show()
+
+print('updated_records_df')
+updated_records_df.show()
+
+print("merge the update dataframes")
+
+merge_updates = updated_records_df.unionByName(update_df)
+
+merge_updates.show()
+
+print("merging the updates and new dataframes")
+merged_df = merge_updates.unionByName(new_df).dropDuplicates(['ModelName', 'Segment', 'EngineCapacity']).drop('pkmodelid')
+print('merge count:', merged_df.count())
+# merged_df.show()
+
+window_spec = Window.partitionBy("ModelName", "Segment", "EngineCapacity", "FuelCapacity", "SeatCapacity", "WheelerKey").orderBy("StartDate")
+
+
+final_df = merged_df.withColumn('StartDate', to_timestamp('StartDate')).withColumn('EndDate', to_timestamp('EndDate')).withColumn('FuelCapacity',  F.col('FuelCapacity').cast(StringType())).withColumn('SeatCapacity',  F.col('SeatCapacity').cast(StringType()))
+
+final_df = final_df.dropDuplicates(['ModelName', 'Segment', 'EngineCapacity'])
+final_df.show()
+
+print('final_df count::', final_df.count())
+
+print('add column to final_df ')
+
+final_df_2 = final_df.withColumn('pkModelId', lit(None))
+
+union_df = final_df_2.unionByName(dim_df) 
+
+union_df = union_df.withColumn("row_num", row_number().over(window_spec))
+
+# Filter out old records (row_num > 1)
+dim_df_updated = union_df.filter("row_num = 1")
+
+print("dim_df_updated count::", dim_df_updated.count())
+
+dim_df_updated = dim_df_updated.drop('row_num', 'pkModelId')
+
+print('final df writing to table')
+print('1...2....3...')
+if dim_df_updated.count() > 0:
+
+    print("founded new or updated records.. overwriting the table")
+    dim_df_updated.write.mode('overwrite').saveAsTable('uat.dimmodel')
+    print("success....")
+else:
+    print("No new or updates founded...")
 
 
 ========================= ================================================= SCD1 ====================================== ===========
