@@ -1,0 +1,54 @@
+dbutils.fs.ls('/mnt/Dev96Stage/Zoho')
+
+absolute_path = dbutils.fs.ls('/mnt/Dev96Stage/Zoho')[0].path
+print(absolute_path)
+
+def Process_PeopleData(path):
+    try:
+        df = spark.read.format('json').option('multiLine', True).load(path)
+        
+        print("print schema")
+
+        df.printSchema()
+
+        df3 = df.select('response.result')
+
+        exploded_df = df3.select(explode('result').alias('result_exploded'))
+
+
+        exploded_df.printSchema()
+
+        result_keys = [col for col in exploded_df.select("result_exploded.*").columns]
+
+        print(result_keys)
+
+        # # result_dfs = []
+        final_df = None
+
+        for key in result_keys:
+
+            # result_df = exploded_df.select( col(f"result_exploded.{key}.FirstName").alias('FirstName') , col(f"result_exploded.{key}.LastName").alias('LastName'), col(f"result_exploded.{key}.EmailID").alias("email"))
+            result_df = exploded_df.select( array_join(col(f"result_exploded.{key}.FirstName"), ", ").alias('FirstName'),
+                array_join(col(f"result_exploded.{key}.LastName"), ", ").alias('LastName'),
+                array_join(col(f"result_exploded.{key}.EmailID"), ", ").alias("email") )
+
+
+            if final_df is None:
+                final_df = result_df
+
+            else:
+                final_df = final_df.union(result_df).dropna()
+
+
+# final_df = result_df.dropna()
+
+        final_df.show()
+        
+        # final_df.coalesce(1).write.mode('overwrite').option("header", "true").save('path')
+
+    except Exception as e:
+        print(f"An error occured while processing the function :: {str(e)}")
+        raise e
+
+
+Process_PeopleData(path= absolute_path) 
