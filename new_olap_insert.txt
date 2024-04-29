@@ -92,7 +92,19 @@ where DateKey = replace(convert(date, a), '-', '')
 ORDER BY Date desc
 OPTION (MAXRECURSION 0);
 
+--- --------------------------- -
 
+select * into #tempD from dbo.DimDate;
+
+WITH t AS (
+    SELECT 1 AS sr_no
+    UNION ALL
+    SELECT sr_no + 1 FROM t WHERE sr_no < 90
+),
+t1 AS (
+    SELECT DATEADD(DAY, sr_no+1 , GETDATE()) AS a FROM t -- from may 1
+)
+select * from t1;
 =============================================================DimEmployees==============================
 WITH DataEmployees AS (
     SELECT
