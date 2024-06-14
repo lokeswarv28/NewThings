@@ -63,3 +63,5 @@ EXEC [dev].[sp_GetColumnMappingActivity] @table_name = '2-WheelSales.csv';
 
 select * from dev.ColumnDetails;
 
+
+
