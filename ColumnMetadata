@@ -1,0 +1,65 @@
+create table dev.ColumnDetails (
+ColumnDetailsID int primary key,
+FileName nvarchar(max),
+SourceColumnName nvarchar(max),
+TargetColumnName nvarchar(max)
+
+);
+
+
+select * from dev.ColumnDetails;
+
+insert into dev.ColumnDetails values (1, '2-WheelSales.csv', '[OEM,Model,Segment,Month,Year]', '[OEM,Model,Segment,Month,Year]');
+
+CREATE PROCEDURE [dev].[sp_GetColumnMappingActivity]
+  @table_name NVARCHAR(100) 
+AS
+BEGIN
+  DECLARE @json_construct NVARCHAR(MAX) = '{"type": "TabularTranslator", "mappings": [X], "typeConversion":true,"typeConversionSettings":{"allowDataTruncation":true,"treatBooleanAsNumber":false}}';
+  DECLARE @sourceColumns NVARCHAR(MAX);
+  DECLARE @targetColumns NVARCHAR(MAX);
+
+  -- Retrieve the source and target column lists
+  SELECT 
+    @sourceColumns = SourceColumnName, 
+    @targetColumns = TargetColumnName
+  FROM dev.ColumnDetails
+  WHERE FileName = @table_name;
+
+  -- Split the source and target column lists into table variables
+  DECLARE @sourceTable TABLE (ColumnName NVARCHAR(100));
+  DECLARE @targetTable TABLE (ColumnName NVARCHAR(100));
+
+  INSERT INTO @sourceTable (ColumnName)
+  SELECT TRIM(value) FROM STRING_SPLIT(REPLACE(REPLACE(@sourceColumns, '[', ''), ']', ''), ',');
+
+  INSERT INTO @targetTable (ColumnName)
+  SELECT TRIM(value) FROM STRING_SPLIT(REPLACE(REPLACE(@targetColumns, '[', ''), ']', ''), ',');
+
+  -- Combine the source and target columns into JSON
+  DECLARE @json NVARCHAR(MAX);
+  SET @json = (
+    SELECT 
+      st.ColumnName AS 'source.name',
+      'String' AS 'source.type',
+      'String' AS 'source.physicalType',
+      tt.ColumnName AS 'sink.name',
+      'String' AS 'sink.type',
+      'String' AS 'sink.physicalType'
+    FROM @sourceTable st
+    JOIN @targetTable tt ON st.ColumnName = tt.ColumnName
+    FOR JSON PATH
+  );
+
+  -- Combine the JSON string with the JSON construct
+  SET @json = REPLACE(@json_construct, '[X]', @json);
+
+  -- Return the final JSON output
+  SELECT @json AS json_output;
+END;
+
+
+EXEC [dev].[sp_GetColumnMappingActivity] @table_name = '2-WheelSales.csv';
+
+select * from dev.ColumnDetails;
+
