@@ -1,0 +1,28 @@
+﻿ID,Schema,TableName,ColumnName,FILENAME,FILECOLUMNS,RENAMECOLUMNS,SourceDataType,TargetDataType
+1,Dim,Brand,Brand,2-WheelSales,OEM,brand,string,string
+3,Dim,Fuel,FuelType,2-WheelSales,Model,,string,string
+4,Dim,Location,Country,2-WheelSales,Segment,,string,string
+4,Dim,Location,Region,2-WheelSales,Month,monthofsale,string,string
+4,Dim,Location,City,2-WheelSales,Year,yearofsale,int,int
+5,Dim,Model,Model,2-WheelSales,NoOfSales,,int,int
+5,Dim,Model,Segment,2-WheelSales,EngineCapacity,,string,string
+5,Dim,Model,fuelcapacity(l),2-WheelSales,Mileage,,string,string
+5,Dim,Model,BodyType,2-WheelSales,Model Price,pricerange,string,string
+5,Dim,Model,SeatingCapacity,2-WheelSales,Dealer location,,string,string
+6,Dim,Transmission,Transmission,2-WheelSales,Region,,string,string
+7,Fact,SalesOfFourWheeler,EngineCapacity,4-WheelSales,Brand,,string,string
+7,Fact,SalesOfFourWheeler,Mileage,4-WheelSales,Model,,string,string
+7,Fact,SalesOfFourWheeler,Top_Speed in Km/h,4-WheelSales,Body Type,segment,string,string
+7,Fact,SalesOfFourWheeler,NoOfCylinders,4-WheelSales,FUEL TYPE,,string,string
+7,Fact,SalesOfFourWheeler,Pricerange,4-WheelSales,Mileage,,string,string
+7,Fact,SalesOfFourWheeler,yearofsale,4-WheelSales,ENGINE,enginecapacity,string,string
+7,Fact,SalesOfFourWheeler,monthofsale,4-WheelSales,TRANSMISSION,,string,string
+8,Fact,SalesOfTwoWheeler,EngineCapacity,4-WheelSales,Price range,,string,string
+8,Fact,SalesOfTwoWheeler,Mileage,4-WheelSales,Fuel Capacity (L),,int,int
+8,Fact,SalesOfTwoWheeler,NoOfSales,4-WheelSales,Seating Capacity,,int,int
+8,Fact,SalesOfTwoWheeler,Pricerange,4-WheelSales,Top_Speed in Km/h,,string,string
+8,Fact,SalesOfTwoWheeler,yearofsale,4-WheelSales,No Of Cylinders,,int,int
+8,Fact,SalesOfTwoWheeler,monthofsale,4-WheelSales,Year Of Sale,,int,int
+,,,,4-WheelSales,Month Of Sale ,,string,string
+,,,,4-WheelSales,Country,,string,string
+,,,,4-WheelSales,City,,string,string
