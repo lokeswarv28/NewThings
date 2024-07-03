@@ -105,6 +105,23 @@ t1 AS (
     SELECT DATEADD(DAY, sr_no+1 , GETDATE()) AS a FROM t -- from may 1
 )
 select * from t1;
+
+select * into #temp7 from dma.DimDate
+
+SELECT * FROM #temp7;
+
+select max(Date) from #temp7;
+
+
+WITH t AS (
+    SELECT 1 AS sr_no
+    UNION ALL
+    SELECT sr_no + 1 FROM t WHERE sr_no < 122
+),
+t1 AS (
+    SELECT DATEADD(DAY, sr_no + 1, GETDATE()) AS a FROM t
+)select * from t1 
+OPTION (MAXRECURSION 0);
 =============================================================DimEmployees==============================
 WITH DataEmployees AS (
     SELECT
