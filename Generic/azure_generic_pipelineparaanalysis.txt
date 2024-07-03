@@ -1,0 +1,3612 @@
+create table dev.ColumnDetails (
+Pk_ColumnDetails int primary key not null,
+SourceTypes nvarchar(max),
+SourceColumnName nvarchar(max),
+TargetColumnName nvarchar(max),
+ColumnTypes nvarchar(max),
+IsNullable int, 
+IsActive int,
+Fk_ActivityID int
+FOREIGN KEY (Fk_ActivityID) REFERENCES dev.entity(Pk_ActivityID) 
+);
+
+
+create table dev.Entity (
+Pk_ActivityID int identity(1,1) primary key,
+ActivityName nvarchar(max),
+ActivityLayer nvarchar(max),
+IsActive char(3),
+Fk_PipelineID INT,
+FOREIGN KEY (Fk_PipelineID) REFERENCES dev.pipelines(Pk_PipelineID) 
+
+);
+
+
+CREATE TABLE dev.runactivity (
+    Pk_RunActivityID INT identity(1,1) PRIMARY KEY,
+	PipelineRunID nvarchar(max) ,
+    ErrorMessage NVARCHAR(MAX),         
+    RunDate DATETIME,                   
+    ActivityStartTime DATETIME,   
+    CompletedStage varchar(50),       
+    ActivityEndTime DATETIME,            
+    Fk_PipelineID INT,
+    FOREIGN KEY (Fk_PipelineID) REFERENCES dev.pipelines(Pk_PipelineID)  
+);
+
+
+
+create table dev.pipelines2 (
+Pk_PipelineID int primary key ,
+PipelineName nvarchar(max),
+Description nvarchar(max),
+PipelineParameters nvarchar(max),
+Stage NVARCHAR(50) NOT NULL,
+IsActivie int
+);
+
+
+
+===================== ========================================== =========================== ==================================== ==================== ===============
+create table dev.pipelines2 (
+Pk_PipelineID int primary key ,
+PipelineName nvarchar(max),
+Description nvarchar(max),
+PipelineParameters nvarchar(max),
+Stage NVARCHAR(50) NOT NULL,
+ExecutionOrder INT NOT NULL,
+DependencyGroup INT NOT NULL
+
+);
+
+insert into dev.pipelines2 values (101, 'PL_Copy2WheelsData', 'Copy the Src file to Raw layer', null, 'Raw Zone', 1, null), (102, 'PL_Copy4WheelsData', 'Copy the Src file to Raw layer', null, 'Raw Zone', 2, null),
+(103,'PL_TRANSFORM2WHEELS', 'Data preprocessing from Raw to silver', null, 'Silver Zone', 3, 101), (104, 'PL_TRANSFORM4WHEELS', 'Data preprocessing from raw to silver', null, 'Silver Zone', 4, 102);
+
+
+Data in my pipelines2 table::
+
+
+Pk_PipelineID	PipelineName			Description		PipelineParameters							Stage	ExecutionOrder	ParentPipelineID  SourceTypes
+101		PL_Copy2WheelsData	Copy the Src file to Raw layer	{para_filenamesrc : "2wheels.csv", para_filenamesink: "demo2.csv"}	Raw Zone	1		NULL		CSV
+102		PL_Copy4WheelsData	Copy the Src file to Raw layer	{para_filenamesrc : "4wheels.csv", para_filenamesink: "demo4.csv"}	Raw Zone	2		NULL		CSV
+103		PL_TRANSFORM2WHEELS	Data preprocessing from Raw to silver	NULL								Silver Zone	3		101		SQL
+104		PL_TRANSFORM4WHEELS	Data preprocessing from raw to silver	NULL								Silver Zone	4		102		SQL
+
+
+Hey design a Pipeline IN ADF Based on the SourceTypes Pipeline has to dynamically pick up and according to the PipelineParameters execute the Logic
+
+for example :: in switch activity case = csv.. here hold copy data activity source with datasetparametes comes from para_filenamesrc from Lookup 
+
+Now i designed the PL_COPY2WHEELSDATA LIKE FOLLOWS
+Script :: select Pk_PipelineID, Stage from dev.pipelines2 where PipelineName = '@{pipeline().Pipeline}';
+then copy data activity
+
+PL_COPY4WHEELS ALSO FOLLOWED THE SAME PROCESS
+
+this is my RunLogs ::
+
+Pk_RunActivityID	PipelineRunID		PipelineName	ErrorMessage	RunDate				ActivityStartTime		ActivityEndTime			CompletedStage	Fk_PipelineID
+
+
+
+Now design a pipeline in ADF when the 101, 102 run successfully, check the RunLogs Table ErrorMessage as successed or Failed.. If Failed run that pipeline again 
+
+
+Now i designed the Pipelines for PL_TRANSFORM2WHEELS , PL_TRANSFORM4WHEELS in adf.
+But what i want is I need a another pipelines which checks the Runactivity2 table like either all the Raw Zone pipelines are executed succeeded along with fk_pipelineID 
+once after that only i need to execute the Silver Zone pipelines , beacuse we add ParentPipelineID right? means once after those pipelines has been execute then only 
+my pipelines associated with ParentPipelineID has to execute;
+
+
+this is my Runactivity2 table data :
+
+Pk_RunActivityID	PipelineRunID			ErrorMessage	RunDate			ActivityStartTime	ActivityEndTime		CompletedStage	Fk_PipelineID
+1		d0ea4980-e4d0-41cd-9a52-9027aba04805	Succeeded	2024-06-21 07:49:37.363	2024-06-21 07:49:44.803	2024-06-21 07:50:07.083	Raw Zone	101
+2		5f2598a6-f12c-4e65-ba49-17428be9924e	Succeeded	2024-06-21 07:49:37.363	2024-06-21 07:49:44.803	2024-06-21 07:50:09.570	Raw Zone	102
+
+
+{
+    "name": "PL_EXECUTE_MASTER_RAW",
+    "properties": {
+        "activities": [
+            {
+                "name": "ACT_GEN_LKP_PIPELINES",
+                "type": "Lookup",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "SqlServerSource",
+                        "sqlReaderQuery": {
+                            "value": "select * from dev.pipelines2",
+                            "type": "Expression"
+                        },
+                        "queryTimeout": "02:00:00",
+                        "partitionOption": "None"
+                    },
+                    "dataset": {
+                        "referenceName": "DS_SQLSERVER_PIPELINES",
+                        "type": "DatasetReference"
+                    },
+                    "firstRowOnly": false
+                }
+            },
+            {
+                "name": "ACT_ITCR_FOR_LKPSTAGES",
+                "type": "ForEach",
+                "dependsOn": [
+                    {
+                        "activity": "ACT_GEN_LKP_PIPELINES",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "items": {
+                        "value": "@activity('ACT_GEN_LKP_PIPELINES').output.value",
+                        "type": "Expression"
+                    },
+                    "isSequential": true,
+                    "activities": [
+                        {
+                            "name": "ACT_ITCR_SWITCH",
+                            "type": "Switch",
+                            "dependsOn": [],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "on": {
+                                    "value": "@item().Stage",
+                                    "type": "Expression"
+                                },
+                                "cases": [
+                                    {
+                                        "value": "Raw Zone",
+                                        "activities": [
+                                            {
+                                                "name": "ACT_GEN_SET_STARTIME",
+                                                "type": "SetVariable",
+                                                "dependsOn": [],
+                                                "policy": {
+                                                    "secureOutput": false,
+                                                    "secureInput": false
+                                                },
+                                                "userProperties": [],
+                                                "typeProperties": {
+                                                    "variableName": "st",
+                                                    "value": {
+                                                        "value": "@utcNow()",
+                                                        "type": "Expression"
+                                                    }
+                                                }
+                                            },
+                                            {
+                                                "name": "ACT_GEN_EPIPE_2WHEELS",
+                                                "type": "ExecutePipeline",
+                                                "dependsOn": [
+                                                    {
+                                                        "activity": "ACT_GEN_SET_STARTIME",
+                                                        "dependencyConditions": [
+                                                            "Succeeded"
+                                                        ]
+                                                    }
+                                                ],
+                                                "policy": {
+                                                    "secureInput": false
+                                                },
+                                                "userProperties": [],
+                                                "typeProperties": {
+                                                    "pipeline": {
+                                                        "referenceName": "PL_Copy2WheelsData",
+                                                        "type": "PipelineReference"
+                                                    },
+                                                    "waitOnCompletion": true
+                                                }
+                                            },
+                                            {
+                                                "name": "ACT_GEN_SPROC_RUNACTIVITYLOGS",
+                                                "type": "SqlServerStoredProcedure",
+                                                "dependsOn": [
+                                                    {
+                                                        "activity": "ACT_GEN_EPIPE_2WHEELS",
+                                                        "dependencyConditions": [
+                                                            "Completed"
+                                                        ]
+                                                    }
+                                                ],
+                                                "policy": {
+                                                    "timeout": "0.12:00:00",
+                                                    "retry": 0,
+                                                    "retryIntervalInSeconds": 30,
+                                                    "secureOutput": false,
+                                                    "secureInput": false
+                                                },
+                                                "userProperties": [],
+                                                "typeProperties": {
+                                                    "storedProcedureName": "[Dev].[sp_InsertRunActivity2]",
+                                                    "storedProcedureParameters": {
+                                                        "ActivityEndTime": {
+                                                            "value": {
+                                                                "value": "@utcNow()",
+                                                                "type": "Expression"
+                                                            },
+                                                            "type": "DateTime"
+                                                        },
+                                                        "ActivityStartTime": {
+                                                            "value": {
+                                                                "value": "@variables('st')",
+                                                                "type": "Expression"
+                                                            },
+                                                            "type": "DateTime"
+                                                        },
+                                                        "completedstage": {
+                                                            "value": "Raw Zone",
+                                                            "type": "String"
+                                                        },
+                                                        "ErrorMessage": {
+                                                            "value": {
+                                                                "value": "@activity('ACT_GEN_EPIPE_2WHEELS').status",
+                                                                "type": "Expression"
+                                                            },
+                                                            "type": "String"
+                                                        },
+                                                        "Fk_PipelineID": {
+                                                            "value": "101",
+                                                            "type": "Int32"
+                                                        },
+                                                        "pipelineRunId": {
+                                                            "value": {
+                                                                "value": "@activity('ACT_GEN_EPIPE_2WHEELS').output.pipelineRunId",
+                                                                "type": "Expression"
+                                                            },
+                                                            "type": "String"
+                                                        },
+                                                        "RunDate": {
+                                                            "value": {
+                                                                "value": "@pipeline().TriggerTime",
+                                                                "type": "Expression"
+                                                            },
+                                                            "type": "DateTime"
+                                                        }
+                                                    }
+                                                },
+                                                "linkedServiceName": {
+                                                    "referenceName": "LS_SQL_Dev_Schema",
+                                                    "type": "LinkedServiceReference"
+                                                }
+                                            },
+                                            {
+                                                "name": "ACT_GEN_SET_STARTIME_copy1",
+                                                "type": "SetVariable",
+                                                "dependsOn": [],
+                                                "policy": {
+                                                    "secureOutput": false,
+                                                    "secureInput": false
+                                                },
+                                                "userProperties": [],
+                                                "typeProperties": {
+                                                    "variableName": "st",
+                                                    "value": {
+                                                        "value": "@utcNow()",
+                                                        "type": "Expression"
+                                                    }
+                                                }
+                                            },
+                                            {
+                                                "name": "ACT_GEN_EPIPE_4WHEELS",
+                                                "type": "ExecutePipeline",
+                                                "dependsOn": [
+                                                    {
+                                                        "activity": "ACT_GEN_SET_STARTIME_copy1",
+                                                        "dependencyConditions": [
+                                                            "Succeeded"
+                                                        ]
+                                                    }
+                                                ],
+                                                "policy": {
+                                                    "secureInput": false
+                                                },
+                                                "userProperties": [],
+                                                "typeProperties": {
+                                                    "pipeline": {
+                                                        "referenceName": "PL_Copy4WheelsData",
+                                                        "type": "PipelineReference"
+                                                    },
+                                                    "waitOnCompletion": true
+                                                }
+                                            },
+                                            {
+                                                "name": "ACT_GEN_SPROC_RUNACTIVITYLOGS_copy1",
+                                                "type": "SqlServerStoredProcedure",
+                                                "dependsOn": [
+                                                    {
+                                                        "activity": "ACT_GEN_EPIPE_4WHEELS",
+                                                        "dependencyConditions": [
+                                                            "Completed"
+                                                        ]
+                                                    }
+                                                ],
+                                                "policy": {
+                                                    "timeout": "0.12:00:00",
+                                                    "retry": 0,
+                                                    "retryIntervalInSeconds": 30,
+                                                    "secureOutput": false,
+                                                    "secureInput": false
+                                                },
+                                                "userProperties": [],
+                                                "typeProperties": {
+                                                    "storedProcedureName": "[Dev].[sp_InsertRunActivity2]",
+                                                    "storedProcedureParameters": {
+                                                        "ActivityEndTime": {
+                                                            "value": {
+                                                                "value": "@utcNow()",
+                                                                "type": "Expression"
+                                                            },
+                                                            "type": "DateTime"
+                                                        },
+                                                        "ActivityStartTime": {
+                                                            "value": {
+                                                                "value": "@variables('st')",
+                                                                "type": "Expression"
+                                                            },
+                                                            "type": "DateTime"
+                                                        },
+                                                        "completedstage": {
+                                                            "value": "Raw Zone",
+                                                            "type": "String"
+                                                        },
+                                                        "ErrorMessage": {
+                                                            "value": {
+                                                                "value": "@activity('ACT_GEN_EPIPE_4WHEELS').status",
+                                                                "type": "Expression"
+                                                            },
+                                                            "type": "String"
+                                                        },
+                                                        "Fk_PipelineID": {
+                                                            "value": "102",
+                                                            "type": "Int32"
+                                                        },
+                                                        "pipelineRunId": {
+                                                            "value": {
+                                                                "value": "@activity('ACT_GEN_EPIPE_4WHEELS').output.pipelineRunId",
+                                                                "type": "Expression"
+                                                            },
+                                                            "type": "String"
+                                                        },
+                                                        "RunDate": {
+                                                            "value": {
+                                                                "value": "@pipeline().TriggerTime",
+                                                                "type": "Expression"
+                                                            },
+                                                            "type": "DateTime"
+                                                        }
+                                                    }
+                                                },
+                                                "linkedServiceName": {
+                                                    "referenceName": "LS_SQL_Dev_Schema",
+                                                    "type": "LinkedServiceReference"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ],
+                                "defaultActivities": [
+                                    {
+                                        "name": "ACT_GEN_SET_DEFAULT",
+                                        "type": "SetVariable",
+                                        "dependsOn": [],
+                                        "policy": {
+                                            "secureOutput": false,
+                                            "secureInput": false
+                                        },
+                                        "userProperties": [],
+                                        "typeProperties": {
+                                            "variableName": "default",
+                                            "value": {
+                                                "value": "Specified un-mentioned stage values or completed the stage value cases mentioned ",
+                                                "type": "Expression"
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        ],
+        "variables": {
+            "default": {
+                "type": "String"
+            },
+            "st": {
+                "type": "String"
+            },
+            "ids": {
+                "type": "Integer"
+            }
+        },
+        "folder": {
+            "name": "Generic"
+        },
+        "annotations": [],
+        "lastPublishTime": "2024-06-20T13:49:03Z"
+    },
+    "type": "Microsoft.DataFactory/factories/pipelines"
+}
+
+
+this is my pipeline JSON WHICH IS RESPONSIBLE FOR THE DATA LOADING INTO THE RUNACTIVITY TABLE .
+
+
+================== ===================== ============================ ======================== ===========================================
+
+{
+	"firstRow": {
+		"Total": 1,
+		"Succeeded": 1,
+		"Fk_PipelineID": 101
+	},
+	"effectiveIntegrationRuntime": "AutoResolveIntegrationRuntime (UK South)",
+	"billingReference": {
+		"activityType": "PipelineActivity",
+		"billableDuration": [
+			{
+				"meterType": "AzureIR",
+				"duration": 0.016666666666666666,
+				"unit": "Hours"
+			}
+		],
+		"totalBillableDuration": [
+			{
+				"meterType": "AzureIR",
+				"duration": 0.016666666666666666,
+				"unit": "Hours"
+			}
+		]
+	},
+	"durationInQueue": {
+		"integrationRuntimeQueue": 0
+	}
+}
+
+
+i had designed two pipelines PL_Copy2WheelsData, PL_COPY4WheelsData which have script , copydata activity i script activity i written query like below :: 
+select Pk_PipelineID, Stage from dev.pipelines2 where PipelineName = '@{pipeline().Pipeline}';
+
+Now i will i have to execute those pipelines based on Stage and source columns in the 
+
+
+
+Now my pipeline has to pickup PipelineName from this table and execute that particular pipeline 
+and below table is used to store the Logs 
+
+CREATE TABLE dev.runactivity2 (
+    Pk_RunActivityID INT identity(1,1) PRIMARY KEY,
+	PipelineRunID nvarchar(max) ,
+    ErrorMessage NVARCHAR(MAX),         
+    RunDate DATETIME,                   
+    ActivityStartTime DATETIME,          
+    ActivityEndTime DATETIME,
+	CompletedStage nvarchar(max),
+    Fk_PipelineID INT,
+    FOREIGN KEY (Fk_PipelineID) REFERENCES dev.pipelines2(Pk_PipelineID)  
+);
+
+create procedure dev.sp_InsertRunActivity2 
+@pipelineRunId nvarchar(max),
+@ErrorMessage nvarchar(max),
+@RunDate Datetime ,
+@ActivityStartTime Datetime ,
+@ActivityEndTime Datetime,
+@completedstage nvarchar(max),
+@Fk_PipelineID int 
+
+as
+Begin 
+
+	Insert into dev.runactivity2 (
+		pipelinerunid,
+		ErrorMessage,
+		RunDate,
+		ActivityStartTime,
+		ActivityEndTime,
+		CompletedStage,
+		Fk_PipelineID
+	
+	)
+
+	values (
+		@pipelineRunId,
+		@ErrorMessage,
+		@RunDate,
+		@ActivityStartTime,
+		@ActivityEndTime,
+		@completedstage,
+		@Fk_PipelineID
+	
+	);
+
+End;
+
+Now my Question is : IS it possible to run my pipelines in adf from the Execution order mentioned in that Table??
+
+
+
+
+Data in my Pipelines Table : 
+
+Pk_PipelineID	PipelineName		PipelineParameters						SourceTypes
+101		PL_SetVariableTest	{para_test : "Hi Hello"}					SQL
+102		PL_MetaCopyData		{para_filenamesrc : "demo.csv", para_filenamesink: "demo2.csv"}	SQL
+103		PL_RESTAPITEST		NULL								API
+
+
+now i need to create a another table called PipelineHeriracy with order of execution column as well 
+
+
+Data in my entity Table::
+
+Pk_ActivityID	ActivityName			ActivityLayer	IsActive	Fk_PipelineID
+1		ACT_GEN_SCRIPT_PARAMETERS	RawLayer	Y  			101
+2		ACT_GEN_SETSAMPLEJSON		RawLayer	Y  			101
+
+
+Now here is my runactivity table which is used to store the logs
+CREATE TABLE dev.runactivity (
+    Pk_RunActivityID INT identity(1,1) PRIMARY KEY,
+    ErrorMessage NVARCHAR(MAX),         
+    RunDate DATETIME,                   
+    ActivityStartTime DATETIME,          
+    ActivityEndTime DATETIME,            
+    Fk_ActivityID INT,
+    FOREIGN KEY (Fk_ActivityID) REFERENCES dev.Entity(Pk_ActivityID)  
+);
+
+
+Now in ADF i designed a Pipeline called 'PL_SetVariableTest' with Script activity and setvariable activites 
+
+in script activity :: query :: select PipelineParameters from dev.pipelines where PipelineName = '@{pipeline().Pipeline}' it picks parameters according to pipeline name from pipelines Table.
+
+Now i need to dump the Logs into runactivity table.. based on the PipelineName it has to pickup the PipelineID and from PipelineID need to dump Fk_ActivityID into runactivity table 
+
+ 
+Set Variable Activity:
+Name: LogErrorMessage
+Variable name: ErrorMessage
+Value: Use an expression like @coalesce(pipeline().TriggerError.Activity1.error.message, pipeline().TriggerError.Activity2.error.message, pipeline().TriggerError.Activity3.error.message) to capture the error message from the failed activity. Adjust activity names based on your pipeline.
+
+
+CREATE TABLE dev.runactivity (
+    Pk_RunActivityID INT PRIMARY KEY,
+    ErrorMessage NVARCHAR(MAX),         
+    RunDate DATETIME,                   
+    ActivityStartTime DATETIME,          
+    ActivityEndTime DATETIME,            
+    Fk_PipelineID INT,
+    FOREIGN KEY (Fk_PipelineID) REFERENCES dev.pipelines(Pk_PipelineID)  
+);
+
+
+Now above two are my tables , design a store proc which are going to insert values into runactivity table;
+
+
+CREATE PROCEDURE dev.sp_InsertRunActivity
+    @ErrorMessage NVARCHAR(MAX),
+    @RunDate DATETIME,
+    @ActivityStartTime DATETIME,
+    @ActivityEndTime DATETIME,
+    @Fk_PipelineID INT
+AS
+BEGIN
+    INSERT INTO dev.runactivity (
+        ErrorMessage,
+        RunDate,
+        ActivityStartTime,
+        ActivityEndTime,
+        Fk_PipelineID
+    )
+    VALUES (
+        @ErrorMessage,
+        @RunDate,
+        @ActivityStartTime,
+        @ActivityEndTime,
+        @Fk_PipelineID
+    );
+END;
+
+create table dev.pipelines (
+Pk_PipelineID int primary key ,
+PipelineName nvarchar(max),
+PipelineParameters nvarchar(max)
+
+);
+
+create table dev.Entity (
+Pk_ActivityID int Identity(1,1) primary key 
+ActivityName nvarchar(max),
+ActivityLayer nvarchar(max),
+FK_PipelineID int ,
+IsActive char
+);
+
+data in dev.pipelines ::
+
+Pk_PipelineID	PipelineName		PipelineParameters
+101		PL_SetVariableTest	{para_test : "Hi Hello"}
+102		PL_MetaParameters	{para_filenamesrc : "demo.csv", para_filenamesink: "demo2.csv"}
+
+Now design the two tables one is for Pipeline runs and another one is activity runs 
+
+Here is designed for PipelineRuns
+
+CREATE TABLE dev.runactivity (
+    Pk_RunActivityID INT PRIMARY KEY,
+    ErrorMessage NVARCHAR(MAX),         
+    RunDate DATETIME,                   
+    ActivityStartTime DATETIME,          
+    ActivityEndTime DATETIME,            
+    Pk_ActivityID INT,
+    FOREIGN KEY (Pk_PipelineID) REFERENCES dev.Entity(Pk_PipelineID)  
+);
+
+Design for activity runs that has to link with PipelineID
+
+here is the data in the Table looks like::
+
+Pk_ActivityID	ActivityName			ActivityLayer	IsActive
+1		ACT_GEN_SCRIPT_PARAMETERS	RawLayer	Y  
+2		ACT_GEN_SETSAMPLEJSON		RawLayer	Y  
+
+
+
+got the error : BEACUASE OF ACTIVITY SUCESS AND I SELECT ON-COMPLETION DEPENDECY . 
+
+The expression 'activity('Switch1').Error.message' cannot be evaluated because property 'message' cannot be selected.
+Now By using Below condition as an example can we make our condition according to it. No error message then dump null 
+if(contains(item(), 'media_url'), item().media_url, null)
+
+CREATE TABLE dev.runactivity (
+    Pk_RunActivityID INT PRIMARY KEY,
+    ErrorMessage NVARCHAR(MAX),         
+    RunDate DATETIME,                   
+    ActivityStartTime DATETIME,          
+    ActivityEndTime DATETIME,            
+    Fk_ActivityID INT,
+    FOREIGN KEY (Fk_ActivityID) REFERENCES dev.Entity(Pk_ActivityID)  
+);
+
+Now in adf i designed the Pipeline with the Activites mentioned in the entity table . according to the activityid i need to dump the values into run activity table
+
+my pipeline having two activties those are mentioned in the activityName. ActivityStartTime and Endtime represents each activities 
+
+
+CREATE PROCEDURE dev.InsertRunActivity
+    @ErrorMessage NVARCHAR(MAX),
+    @RunDate DATETIME,
+    @ActivityStartTime DATETIME,
+    @ActivityEndTime DATETIME,
+    @Fk_ActivityID INT
+AS
+BEGIN
+    INSERT INTO dev.runactivity (ErrorMessage, RunDate, ActivityStartTime, ActivityEndTime, Fk_ActivityID)
+    VALUES (@ErrorMessage, @RunDate, @ActivityStartTime, @ActivityEndTime, @Fk_ActivityID);
+END
+
+
+
+
+create table dev.ColumnDetails (
+ColumnDetailsID int primary key,
+FileName nvarchar(max),
+SourceColumnName nvarchar(max),
+TargetColumnName nvarchar(max)
+
+);
+
+these are my two tables 
+
+
+
+
+Table Output ::
+
+Pk_PipelineID	PipelineName		PipelineParameters
+101		PL_SetVariableTest	{para_test : "Hi Hello"}
+102		PL_MetaParameters	{para_filenamesrc : "demo.csv", para_filenamesink: "demo2.csv"}
+
+I designed a Pipeline IN ADF with script activity . Query in script activity as follows 
+
+select PipelineParameters from dev.pipelines where pk_PipelineID = '@{pipeline().parameters.para_pipelineID}'
+
+output from my script activity::
+
+{
+	"resultSetCount": 1,
+	"recordsAffected": 0,
+	"resultSets": [
+		{
+			"rowCount": 1,
+			"rows": [
+				{
+					"PipelineParameters": "{para_test : \"Hi Hello\"}"
+				}
+			]
+		}
+	],
+	"outputParameters": {},
+	"outputLogs": "",
+	"outputLogsLocation": "",
+	"outputTruncated": false,
+	"effectiveIntegrationRuntime": "AutoResolveIntegrationRuntime (UK South)",
+	"executionDuration": 1,
+	"durationInQueue": {
+		"integrationRuntimeQueue": 0
+	},
+	"billingReference": {
+		"activityType": "PipelineActivity",
+		"billableDuration": [
+			{
+				"meterType": "AzureIR",
+				"duration": 0.016666666666666666,
+				"unit": "Hours"
+			}
+		]
+	}
+}
+
+Now i need to create a setvariable in order to to store para_test value 
+
+insert into dev.pipelines values (101, 'PL_SetVariableTest', '{para_test : "Hi Hello"}'), (102, 'PL_MetaParameters', '{para_filenamesrc : "demo.csv", para_filenamesink: "demo2.csv"}');
+
+select * from dev.pipelines ;
+
+Now this is the Query have been used in set variable working fine
+
+select PipelineParameters from dev.pipelines where PipelineName = '@{pipeline().Pipeline}' 
+
+this is the output from the script activty:
+
+{
+	"resultSetCount": 1,
+	"recordsAffected": 0,
+	"resultSets": [
+		{
+			"rowCount": 1,
+			"rows": [
+				{
+					"PipelineParameters": "{para_filenamesrc : \"demo.csv\", para_filenamesink: \"demo2.csv\"}"
+				}
+			]
+		}
+	],
+	"outputParameters": {},
+	"outputLogs": "",
+	"outputLogsLocation": "",
+	"outputTruncated": false,
+	"effectiveIntegrationRuntime": "AutoResolveIntegrationRuntime (UK South)",
+	"executionDuration": 1,
+	"durationInQueue": {
+		"integrationRuntimeQueue": 0
+	},
+	"billingReference": {
+		"activityType": "PipelineActivity",
+		"billableDuration": [
+			{
+				"meterType": "AzureIR",
+				"duration": 0.016666666666666666,
+				"unit": "Hours"
+			}
+		]
+	}
+}
+
+Now in copy dataactivty i have two dataset with parameterized . 
+
+
+
+
+
+
+select PipelineParameters from dev.pipelines where pk_PipelineID = 101;
+
+
+================================================ ================== ======================================== ================================================
+
+{
+	"count": 2,
+	"value": [
+		{
+			"pk_pipelineid": 101,
+			"PipelineName": "PL_SetVariableTest"
+		},
+		{
+			"pk_pipelineid": 102,
+			"PipelineName": "PL_MetaParameters"
+		}
+	],
+	"effectiveIntegrationRuntime": "AutoResolveIntegrationRuntime (UK South)",
+	"billingReference": {
+		"activityType": "PipelineActivity",
+		"billableDuration": [
+			{
+				"meterType": "AzureIR",
+				"duration": 0.016666666666666666,
+				"unit": "Hours"
+			}
+		],
+		"totalBillableDuration": [
+			{
+				"meterType": "AzureIR",
+				"duration": 0.016666666666666666,
+				"unit": "Hours"
+			}
+		]
+	},
+	"durationInQueue": {
+		"integrationRuntimeQueue": 0
+	}
+}
+
+-- ------------------------ ------------------------------------------------------ -------------------------------
+@equals(activity('Check_Raw_Zone_Pipelines').output.firstRow.Total, activity('Check_Raw_Zone_Pipelines').output.firstRow.Succeeded)
+
+
+Hey i want query on runactivities2 as follows:
+
+
+RunDate, 	Total, 	successedPipelineID, FailedPipelineID
+2024-06-21	2	101			 102
+2024-06-20      2       101                      null
+2026-06-20      2       102                      null   
+
+from this data 
+
+Pk_RunActivityID	PipelineRunID			ErrorMessage	RunDate				ActivityStartTime		ActivityEndTime			CompletedStage	Fk_PipelineID
+1		d0ea4980-e4d0-41cd-9a52-9027aba04805	Succeeded	2024-06-21 07:49:37.363		2024-06-21 07:49:44.803		2024-06-21 07:50:07.083		Raw Zone	101
+2		5f2598a6-f12c-4e65-ba49-17428be9924e	Succeeded	2024-06-21 07:49:37.363		2024-06-21 07:49:44.803		2024-06-21 07:50:09.570		Raw Zone	102
+3		1c940417-cea5-4c96-9cbf-77a77fe7fb8e	Succeeded	2024-06-21 09:59:14.357		2024-06-21 09:59:21.760		2024-06-21 09:59:43.477		Raw Zone	102
+4		8920e5b4-29dd-48f5-a45e-1bca2cf3f037	Failed		2024-06-21 09:59:14.357		2024-06-21 09:59:21.760		2024-06-21 09:59:45.440		Raw Zone	101
+
+
+
+RunDate		Total	successedPipelineID	FailedPipelineID
+2024-06-21	2		101, 102	NULL
+2024-06-21	2		102		101
+
+{
+	"count": 2,
+	"value": [
+		{
+			"RunDate": "2024-06-21T00:00:00Z",
+			"Total": 2,
+			"successedPipelineID": "101, 102",
+			"FailedPipelineID": null
+		},
+		{
+			"RunDate": "2024-06-21T00:00:00Z",
+			"Total": 2,
+			"successedPipelineID": "102",
+			"FailedPipelineID": "101"
+		}
+	],
+	"effectiveIntegrationRuntime": "AutoResolveIntegrationRuntime (UK South)",
+	"billingReference": {
+		"activityType": "PipelineActivity",
+		"billableDuration": [
+			{
+				"meterType": "AzureIR",
+				"duration": 0.016666666666666666,
+				"unit": "Hours"
+			}
+		],
+		"totalBillableDuration": [
+			{
+				"meterType": "AzureIR",
+				"duration": 0.016666666666666666,
+				"unit": "Hours"
+			}
+		]
+	},
+	"durationInQueue": {
+		"integrationRuntimeQueue": 0
+	}
+}
+
+Now this is my lookup output. If want to check which pipelineID is in Success, then run the Pipelines in the silver layer which has ParentPipeline ID successed
+
+pipelines Table:
+
+Pk_PipelineID	PipelineName			Description			PipelineParameters	Stage	ExecutionOrder	ParentPipelineID	SourceTypes
+101		PL_Copy2WheelsData	Copy the Src file to Raw layer		NULL			Raw Zone	1	NULL				SQL
+102		PL_Copy4WheelsData	Copy the Src file to Raw layer		NULL			Raw Zone	2	NULL				SQL
+103		PL_TRANSFORM2WHEELS	Data preprocessing from Raw to silver	NULL			Silver Zone	3	101				SQL
+104		PL_TRANSFORM4WHEELS	Data preprocessing from raw to silver	NULL			Silver Zone	4	102				SQL
+
+runactivityTable:
+
+Pk_RunActivityID	PipelineRunID			ErrorMessage	RunDate				ActivityStartTime		ActivityEndTime			CompletedStage	Fk_PipelineID
+1		d0ea4980-e4d0-41cd-9a52-9027aba04805	Succeeded	2024-06-21 07:49:37.363		2024-06-21 07:49:44.803		2024-06-21 07:50:07.083		Raw Zone	101
+2		5f2598a6-f12c-4e65-ba49-17428be9924e	Succeeded	2024-06-21 07:49:37.363		2024-06-21 07:49:44.803		2024-06-21 07:50:09.570		Raw Zone	102
+3		1c940417-cea5-4c96-9cbf-77a77fe7fb8e	Succeeded	2024-06-21 09:59:14.357		2024-06-21 09:59:21.760		2024-06-21 09:59:43.477		Raw Zone	102
+4		8920e5b4-29dd-48f5-a45e-1bca2cf3f037	Failed		2024-06-21 09:59:14.357		2024-06-21 09:59:21.760		2024-06-21 09:59:45.440		Raw Zone	101
+
+
+Now in the pipelines Table i have the ParentPipelineID 
+when ever i want to execute the Pipelines in adf for silver zone one's i need to check the runactivity table either those parentpipeline ID executed successfully or Failed on Date wise. Take only success ParentPipelineID has to pickup and run the Silver Zone Pipelines.
+Give me sophisticated steps 
+Here is the query i will used to get the SuccessPipelines, FailedPipelines 
+SELECT 
+    cast(RunDate as Date) as RunDate,
+    COUNT(*) AS Total,
+    STRING_AGG(CASE WHEN ErrorMessage = 'Succeeded' THEN CAST(Fk_PipelineID AS VARCHAR) ELSE NULL END, ', ') AS successedPipelineID,
+    STRING_AGG(CASE WHEN ErrorMessage = 'Failed' THEN CAST(Fk_PipelineID AS VARCHAR) ELSE NULL END, ', ') AS FailedPipelineID
+FROM 
+    RunActivity2
+GROUP BY 
+    RunDate
+ORDER BY 
+    RunDate;
+
+
+
+RunDate	Total	successedPipelineID	FailedPipelineID
+2024-06-21	2	101 			NULL
+2024-06-21      2       102			Null
+2024-06-21	2	102			101
+
+
+
+
+CREATE PROCEDURE [dbo].[GetPipelineStatus]
+AS
+BEGIN
+    SELECT
+        RunDate,
+        Total,
+        STRING_AGG(CASE WHEN ErrorMessage = 'Succeeded' THEN CAST(Fk_PipelineID AS VARCHAR) ELSE NULL END, ',') AS successedPipelineID,
+        STRING_AGG(CASE WHEN ErrorMessage = 'Failed' THEN CAST(Fk_PipelineID AS VARCHAR) ELSE NULL END, ',') AS FailedPipelineID
+    FROM (
+        SELECT
+            RunDate,
+            COUNT(*) OVER (PARTITION BY RunDate) AS Total,
+            ErrorMessage,
+            Fk_PipelineID
+        FROM
+            RunActivity2
+    ) AS sub
+    GROUP BY
+        RunDate, Total
+END
+
+
+In the condition you written @contains(item().successedPipelineID, string(item().Fk_Pipeline))But where did you get it.. 
+In the Lookup i used below Query
+SELECT 
+    cast(RunDate as Date) as RunDate,
+    COUNT(*) AS Total,
+    STRING_AGG(CASE WHEN ErrorMessage = 'Succeeded' THEN CAST(Fk_PipelineID AS VARCHAR) ELSE NULL END, ', ') AS successedPipelineID,
+    STRING_AGG(CASE WHEN ErrorMessage = 'Failed' THEN CAST(Fk_PipelineID AS VARCHAR) ELSE NULL END, ', ') AS FailedPipelineID
+FROM 
+    RunActivity2
+GROUP BY 
+    RunDate
+ORDER BY 
+    RunDate;
+
+
+
+============================== ================================= 24-06-2024 ===========================================================================
+This is my runactivity table 
+
+
+I used this Query on top of runactivity Table then i got the output::
+
+
+SELECT 
+    cast(RunDate as Date) as RunDate,
+    COUNT(*) AS Total,
+    STRING_AGG(CASE WHEN ErrorMessage = 'Succeeded' THEN CAST(Fk_PipelineID AS VARCHAR) ELSE NULL END, ', ') AS successedPipelineID,
+    STRING_AGG(CASE WHEN ErrorMessage = 'Failed' THEN CAST(Fk_PipelineID AS VARCHAR) ELSE NULL END, ', ') AS FailedPipelineID
+FROM 
+    dev.RunActivity2
+GROUP BY 
+    RunDate
+ORDER BY 
+    RunDate;
+
+RunDate		Total	successedPipelineID	FailedPipelineID
+2024-06-21	2		101, 102	NULL
+2024-06-21	2		102		101
+2024-06-24	2		102, 101	NULL
+
+As you can see the successedPipelineID have sometimes only one pipelineID value.. at that time this split 
+@split(replace(activity('ACT_GEN_LKP_CHECKSUCCESSPIPELINES').output.value[0].successedPipelineID, ' ', ''),',')
+will throw error right . I WANT IN THE SETVARIABLE ACTIVITY WHICH HAS TO PICKUP OR IDENTIFY ',' AND SPLIT. IF NO ',' DON'T SPLIT
+
+
+pipelines2 Table::
+
+Pk_PipelineID	PipelineName			Description		PipelineParameters	Stage	ExecutionOrder	ParentPipelineID	SourceTypes
+101		PL_Copy2WheelsData	Copy the Src file to Raw layer		NULL		Raw Zone	1		NULL			SQL
+102		PL_Copy4WheelsData	Copy the Src file to Raw layer		NULL		Raw Zone	2		NULL			SQL
+103		PL_TRANSFORM2WHEELS	Data preprocessing from Raw to silver	NULL		Silver Zone	3		101			SQL
+104		PL_TRANSFORM4WHEELS	Data preprocessing from raw to silver	NULL		Silver Zone	4		102			SQL
+
+Note :: SuccessedPipelineID or FailedPipelineID are nothing but a Pk_PipelineID from pipeline2 table.
+
+Question ::
+
+Design a adf Pipeline, which will do lookup on runactivitytable and check the SuccessedPipelineID's .. if pipelineID 102 successed Means from the Pipelines2 Table 102 is a ParentPipelineID then i need to run 104 pipeline 
+Please give the steps to execute.
+
+
+{
+	"name": "ids",
+	"value": [
+		"102",
+		" 101"
+	]
+} this is the output from has been stored in the succededIds
+
+output from raw zone pipelines ::
+
+{
+	"count": 2,
+	"value": [
+		{
+			"Pk_PipelineID": 101,
+			"SourceTypes": "SQL",
+			"ParentPipelineID": null
+		},
+		{
+			"Pk_PipelineID": 102,
+			"SourceTypes": "SQL",
+			"ParentPipelineID": null
+		}
+	],
+	"effectiveIntegrationRuntime": "AutoResolveIntegrationRuntime (UK South)",
+	"billingReference": {
+		"activityType": "PipelineActivity",
+		"billableDuration": [
+			{
+				"meterType": "AzureIR",
+				"duration": 0.016666666666666666,
+				"unit": "Hours"
+			}
+		],
+		"totalBillableDuration": [
+			{
+				"meterType": "AzureIR",
+				"duration": 0.016666666666666666,
+				"unit": "Hours"
+			}
+		]
+	},
+	"durationInQueue": {
+		"integrationRuntimeQueue": 0
+	}
+}
+
+
+now i run this query, but i'm getting False 
+
+@contains(variables('ids'), item().pk_pipelineid)
+
+
+SELECT cast(RunDate as Date) as RunDate, STRING_AGG(CASE WHEN ErrorMessage = 'Succeeded' THEN CAST(Fk_PipelineID AS VARCHAR) ELSE NULL END, ', ') AS successedPipelineID ,
+string_agg(case when ErrorMessage = 'Failed' Then cast(Fk_PipelineID as varchar) Else Null End, ', ' ) as failedPipelineID
+FROM dev.RunActivity2
+WHERE RunDate = '2024-06-21 09:59:14.357' group by RunDate;
+
+
+output :: 
+
+RunDate	   successedPipelineID	failedPipelineID
+2024-06-21	102			101
+
+
+Previous above query been run in the lookup and then used set variable activity of array type as follows :: @split(replace(activity('ACT_GEN_LKP_CHECKSUCCESSPIPELINES').output.value[0].successedPipelineID, ' ', ''),',')
+
+But Now their is only one value in the SuccessedPipelineID , then the split will throw error. So give me the solution to handle both the cases 
+
+= ================ ============================= ======================= ======================================== ============================== ================================== ========================== ========================
+
+
+This is the JSON Code of the Pipeline which i designed in ADF 
+
+
+{
+    "name": "pipeline15",
+    "properties": {
+        "activities": [
+            {
+                "name": "ACT_GEN_LKP_CHECKSUCCESSPIPELINES",
+                "description": "ON MAX DATE",
+                "type": "Lookup",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "SqlServerSource",
+                        "sqlReaderQuery": {
+                            "value": "SELECT cast(RunDate as Date) as RunDate, STRING_AGG(CASE WHEN ErrorMessage = 'Succeeded' THEN CAST(Fk_PipelineID AS VARCHAR) ELSE NULL END, ', ') AS successedPipelineID\nFROM dev.RunActivity2\nWHERE RunDate = (SELECT MAX(RunDate) FROM dev.RunActivity2) group by RunDate;",
+                            "type": "Expression"
+                        },
+                        "queryTimeout": "02:00:00",
+                        "partitionOption": "None"
+                    },
+                    "dataset": {
+                        "referenceName": "DS_SQLSERVER_RUNACTIVITY",
+                        "type": "DatasetReference"
+                    },
+                    "firstRowOnly": false
+                }
+            },
+            {
+                "name": "ACT_GEN_SET_IDS",
+                "type": "SetVariable",
+                "dependsOn": [
+                    {
+                        "activity": "ACT_GEN_LKP_CHECKSUCCESSPIPELINES",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "variableName": "ids",
+                    "value": {
+                        "value": "@split(replace(activity('ACT_GEN_LKP_CHECKSUCCESSPIPELINES').output.value[0].successedPipelineID, ' ', ''),',')",
+                        "type": "Expression"
+                    }
+                }
+            },
+            {
+                "name": "ACT_ITCR_FOR_IDS",
+                "type": "ForEach",
+                "dependsOn": [
+                    {
+                        "activity": "ACT_GEN_SET_IDS",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    },
+                    {
+                        "activity": "ACT_GEN_LKP_GETRAWZONEPIPELINES",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "items": {
+                        "value": "@activity('ACT_GEN_LKP_GETRAWZONEPIPELINES').output.value",
+                        "type": "Expression"
+                    },
+                    "isSequential": true,
+                    "activities": [
+                        {
+                            "name": "ACT_ITCR_IF_PIPELINEIDSUCCESSED",
+                            "type": "IfCondition",
+                            "dependsOn": [],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "expression": {
+                                    "value": "@contains(variables('ids'), string(item().pk_pipelineid))",
+                                    "type": "Expression"
+                                },
+                                "ifFalseActivities": [
+                                    {
+                                        "name": "Wait_FALSE",
+                                        "type": "Wait",
+                                        "dependsOn": [],
+                                        "userProperties": [],
+                                        "typeProperties": {
+                                            "waitTimeInSeconds": 1
+                                        }
+                                    }
+                                ],
+                                "ifTrueActivities": [
+                                    {
+                                        "name": "Wait1",
+                                        "type": "Wait",
+                                        "dependsOn": [],
+                                        "userProperties": [],
+                                        "typeProperties": {
+                                            "waitTimeInSeconds": 1
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                "name": "ACT_GEN_LKP_GETRAWZONEPIPELINES",
+                "type": "Lookup",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "SqlServerSource",
+                        "sqlReaderQuery": {
+                            "value": "select Pk_PipelineID , SourceTypes, ParentPipelineID from dev.pipelines2 where Stage = 'Raw Zone';",
+                            "type": "Expression"
+                        },
+                        "queryTimeout": "02:00:00",
+                        "partitionOption": "None"
+                    },
+                    "dataset": {
+                        "referenceName": "DS_SQLSERVER_PIPELINES",
+                        "type": "DatasetReference"
+                    },
+                    "firstRowOnly": false
+                }
+            }
+        ],
+        "variables": {
+            "ids": {
+                "type": "Array"
+            },
+            "rawids": {
+                "type": "Integer"
+            },
+            "test": {
+                "type": "Boolean"
+            },
+            "test2": {
+                "type": "Integer"
+            },
+            "dummy": {
+                "type": "Boolean"
+            }
+        },
+        "folder": {
+            "name": "Generic"
+        },
+        "annotations": [],
+        "lastPublishTime": "2024-06-24T08:26:26Z"
+    },
+    "type": "Microsoft.DataFactory/factories/pipelines"
+}
+
+
+Now in the false case, i would like to retrive the ID which has been failed. similarly in the True condition as well. Again don't give the JSON CODE.. 
+GIVE ME THE DESIGN STEPS 
+
+But in the if condition when ever the condition matched @contains(variables('ids'), string(item().pk_pipelineid)) then enters into True. in true condition i want to retrive the id's matched 
+
+
+================= =========================================== =================================================================================================================================================================
+
+Listen carefully and understand my requirement 
+Design a Table in SQL SERVER 
+
+with the following requirements 
+
+====================== ============================ ==================================== ============================= =========================================
+
+{
+    "name": "PL_Copy4WheelsData",
+    "properties": {
+        "activities": [
+            {
+                "name": "ACT_GEN_SCRIPT_RUNPIPELINES",
+                "type": "Script",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "linkedServiceName": {
+                    "referenceName": "LS_SQL_Dev_Schema",
+                    "type": "LinkedServiceReference"
+                },
+                "typeProperties": {
+                    "scripts": [
+                        {
+                            "type": "Query",
+                            "text": {
+                                "value": "select Pk_PipelineID, Stage from dev.pipelines2 where PipelineName = '@{pipeline().Pipeline}';",
+                                "type": "Expression"
+                            }
+                        }
+                    ],
+                    "scriptBlockExecutionTimeout": "02:00:00"
+                }
+            },
+            {
+                "name": "ACT_MT_COPY4WHEELS",
+                "type": "Copy",
+                "dependsOn": [
+                    {
+                        "activity": "ACT_GEN_SCRIPT_RUNPIPELINES",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "DelimitedTextSource",
+                        "storeSettings": {
+                            "type": "AzureBlobFSReadSettings",
+                            "recursive": true,
+                            "enablePartitionDiscovery": false
+                        },
+                        "formatSettings": {
+                            "type": "DelimitedTextReadSettings"
+                        }
+                    },
+                    "sink": {
+                        "type": "DelimitedTextSink",
+                        "storeSettings": {
+                            "type": "AzureBlobFSWriteSettings"
+                        },
+                        "formatSettings": {
+                            "type": "DelimitedTextWriteSettings",
+                            "quoteAllText": true,
+                            "fileExtension": ".txt"
+                        }
+                    },
+                    "enableStaging": false,
+                    "translator": {
+                        "type": "TabularTranslator",
+                        "typeConversion": true,
+                        "typeConversionSettings": {
+                            "allowDataTruncation": true,
+                            "treatBooleanAsNumber": false
+                        }
+                    }
+                },
+                "inputs": [
+                    {
+                        "referenceName": "DS_ADLS_2WHEELS",
+                        "type": "DatasetReference"
+                    }
+                ],
+                "outputs": [
+                    {
+                        "referenceName": "DS_ADLS_SINK_WHEELS",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "directory": "4wheels",
+                            "filename": "4_wheels.csv"
+                        }
+                    }
+                ]
+            }
+        ],
+        "variables": {
+            "default": {
+                "type": "String"
+            },
+            "st": {
+                "type": "String"
+            },
+            "success_ids": {
+                "type": "Integer"
+            }
+        },
+        "folder": {
+            "name": "Generic"
+        },
+        "annotations": [],
+        "lastPublishTime": "2024-06-21T07:53:06Z"
+    },
+    "type": "Microsoft.DataFactory/factories/pipelines"
+}
+
+ANOTHER PIPELINE ::
+
+{
+    "name": "PL_Copy2WheelsData",
+    "properties": {
+        "activities": [
+            {
+                "name": "ACT_GEN_SCRIPT_RUNPIPELINES",
+                "type": "Script",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "linkedServiceName": {
+                    "referenceName": "LS_SQL_Dev_Schema",
+                    "type": "LinkedServiceReference"
+                },
+                "typeProperties": {
+                    "scripts": [
+                        {
+                            "type": "Query",
+                            "text": {
+                                "value": "select Pk_PipelineID, Stage from dev.pipelines2 where PipelineName = '@{pipeline().Pipeline}';",
+                                "type": "Expression"
+                            }
+                        }
+                    ],
+                    "scriptBlockExecutionTimeout": "02:00:00"
+                }
+            },
+            {
+                "name": "ACT_MT_COPY2WHEELS",
+                "type": "Copy",
+                "dependsOn": [
+                    {
+                        "activity": "ACT_GEN_SCRIPT_RUNPIPELINES",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "DelimitedTextSource",
+                        "storeSettings": {
+                            "type": "AzureBlobFSReadSettings",
+                            "recursive": true,
+                            "enablePartitionDiscovery": false
+                        },
+                        "formatSettings": {
+                            "type": "DelimitedTextReadSettings"
+                        }
+                    },
+                    "sink": {
+                        "type": "DelimitedTextSink",
+                        "storeSettings": {
+                            "type": "AzureBlobFSWriteSettings"
+                        },
+                        "formatSettings": {
+                            "type": "DelimitedTextWriteSettings",
+                            "quoteAllText": true,
+                            "fileExtension": ".txt"
+                        }
+                    },
+                    "enableStaging": false,
+                    "translator": {
+                        "type": "TabularTranslator",
+                        "typeConversion": true,
+                        "typeConversionSettings": {
+                            "allowDataTruncation": true,
+                            "treatBooleanAsNumber": false
+                        }
+                    }
+                },
+                "inputs": [
+                    {
+                        "referenceName": "DS_ADLS_2WHEELS",
+                        "type": "DatasetReference"
+                    }
+                ],
+                "outputs": [
+                    {
+                        "referenceName": "DS_ADLS_SINK_WHEELS",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "directory": "2wheels",
+                            "filename": "2_wheels.csv"
+                        }
+                    }
+                ]
+            }
+        ],
+        "variables": {
+            "default": {
+                "type": "String"
+            },
+            "st": {
+                "type": "String"
+            },
+            "success_ids": {
+                "type": "Integer"
+            }
+        },
+        "folder": {
+            "name": "Generic"
+        },
+        "annotations": [],
+        "lastPublishTime": "2024-06-24T06:27:03Z"
+    },
+    "type": "Microsoft.DataFactory/factories/pipelines"
+}
+
+
+These are the two pipelines i designed, based on pipelinename , it will picky the parameters and execute those 
+
+============ =================================== ================================= ======================================= ================================
+
+
+Pk_PipelineID	PipelineName			Description				PipelineParameters					Stage	ExecutionOrder	ParentPipelineID	SourceTypes
+101		PL_Copy2WheelsData	Copy the Src file to Raw layer	{para_filenamesrc : "2_wheels.csv", para_filenamesink: "2_wheels.csv"}	Raw Zone	1		NULL			CSV
+102		PL_Copy4WheelsData	Copy the Src file to Raw layer	{para_filenamesrc : "4_wheels.csv", para_filenamesink: "4_wheels.csv"}	Raw Zone	2		NULL			CSV
+
+the above one is my Pipelines2 tables 
+
+when i do the Lookup on top of the table i got the output as follows::
+
+{
+	"count": 2,
+	"value": [
+		{
+			"Pk_PipelineID": 101,
+			"PipelineName": "PL_Copy2WheelsData",
+			"Description": "Copy the Src file to Raw layer",
+			"PipelineParameters": "{para_filenamesrc : \"2_wheels.csv\", para_filenamesink: \"2_wheels.csv\"}",
+			"Stage": "Raw Zone",
+			"ExecutionOrder": 1,
+			"ParentPipelineID": null,
+			"SourceTypes": "CSV"
+		},
+		{
+			"Pk_PipelineID": 102,
+			"PipelineName": "PL_Copy4WheelsData",
+			"Description": "Copy the Src file to Raw layer",
+			"PipelineParameters": "{para_filenamesrc : \"4_wheels.csv\", para_filenamesink: \"4_wheels.csv\"}",
+			"Stage": "Raw Zone",
+			"ExecutionOrder": 2,
+			"ParentPipelineID": null,
+			"SourceTypes": "CSV"
+		}
+	],
+	"effectiveIntegrationRuntime": "AutoResolveIntegrationRuntime (UK South)",
+	"billingReference": {
+		"activityType": "PipelineActivity",
+		"billableDuration": [
+			{
+				"meterType": "AzureIR",
+				"duration": 0.016666666666666666,
+				"unit": "Hours"
+			}
+		],
+		"totalBillableDuration": [
+			{
+				"meterType": "AzureIR",
+				"duration": 0.016666666666666666,
+				"unit": "Hours"
+			}
+		]
+	},
+	"durationInQueue": {
+		"integrationRuntimeQueue": 0
+	}
+}
+
+
+Now inside the foreach i would like to use setvariable called src_filename and value has to come from PipelineParameters according to the execution order 
+
+======= ======================= ============================== ========================================== =========================== ===============================
+
+My table ::
+
+Pk_PipelineID	PipelineName				Description			PipelineParameters							Stage	ExecutionOrder	ParentPipelineID	SourceTypes
+101		PL_Copy2WheelsData	Copy the Src file to Raw layer		{para_filenamesrc : "2-WheelSales.csv", para_filenamesink: "2-WheelSData.csv"}	Raw Zone	1		NULL			CSV
+102		PL_Copy4WheelsData	Copy the Src file to Raw layer		{para_filenamesrc : "4-WheelSales.csv", para_filenamesink: "4-WheelSData.csv"}	Raw Zone	2		NULL			CSV
+103		PL_TRANSFORM2WHEELS	Data preprocessing from Raw to silver			NULL								Silver Zone	3		101			SQL
+104		PL_TRANSFORM4WHEELS	Data preprocessing from raw to silver			NULL								Silver Zone	4		102			SQL
+105		PL_RESTAPI		Copy Data from api					NULL								Raw Zone	5		NULL			API
+106		PL_HOLIDAYSDATA		Copy Data from one table to another	{para_srctable : "projectallocation_92", para_sinktable: "projectallocation_96"}Raw Zone	6		NULL			SQL
+
+{
+	"count": 4,
+	"value": [
+		{
+			"Pk_PipelineID": 101,
+			"PipelineName": "PL_Copy2WheelsData",
+			"Description": "Copy the Src file to Raw layer",
+			"PipelineParameters": "{para_filenamesrc : \"2-WheelSales.csv\", para_filenamesink: \"2-WheelSData.csv\"}",
+			"Stage": "Raw Zone",
+			"ExecutionOrder": 1,
+			"ParentPipelineID": null,
+			"SourceTypes": "CSV"
+		},
+		{
+			"Pk_PipelineID": 102,
+			"PipelineName": "PL_Copy4WheelsData",
+			"Description": "Copy the Src file to Raw layer",
+			"PipelineParameters": "{para_filenamesrc : \"4-WheelSales.csv\", para_filenamesink: \"4-WheelSData.csv\"}",
+			"Stage": "Raw Zone",
+			"ExecutionOrder": 2,
+			"ParentPipelineID": null,
+			"SourceTypes": "CSV"
+		},
+		{
+			"Pk_PipelineID": 105,
+			"PipelineName": "PL_RESTAPI",
+			"Description": "Copy Data from api",
+			"PipelineParameters": null,
+			"Stage": "Raw Zone",
+			"ExecutionOrder": 5,
+			"ParentPipelineID": null,
+			"SourceTypes": "API"
+		},
+		{
+			"Pk_PipelineID": 106,
+			"PipelineName": "PL_HOLIDAYSDATA",
+			"Description": "Copy Data from one table to another",
+			"PipelineParameters": "{para_srctable : \"projectallocation_92\", para_sinktable: \"projectallocation_96\"}",
+			"Stage": "Raw Zone",
+			"ExecutionOrder": 6,
+			"ParentPipelineID": null,
+			"SourceTypes": "SQL"
+		}
+	],
+	"effectiveIntegrationRuntime": "AutoResolveIntegrationRuntime (UK South)",
+	"billingReference": {
+		"activityType": "PipelineActivity",
+		"billableDuration": [
+			{
+				"meterType": "AzureIR",
+				"duration": 0.016666666666666666,
+				"unit": "Hours"
+			}
+		],
+		"totalBillableDuration": [
+			{
+				"meterType": "AzureIR",
+				"duration": 0.016666666666666666,
+				"unit": "Hours"
+			}
+		]
+	},
+	"durationInQueue": {
+		"integrationRuntimeQueue": 0
+	}
+}
+
+this is my lookup output : and Query used in the LKP 
+
+Select * from dev.pipelines2 where Stage = 'Raw Zone';
+
+and my pipeline flows looks like
+
+Lkp>>>foreach
+	|- set_srcfilename   >>>>   switch >> CSV, API, SQL  
+	|- set_sinfilename   >>>>
+	|- set_srctname      >>>>
+	|- set_sinktname     >>>>
+
+error's :: 
+
+The expression 'json(item().PipelineParameters).para_filenamesink
+' cannot be evaluated because property 'para_filenamesink' doesn't exist, available properties are 'para_srctable, para_sinktable'.
+
+The expression 'json(item().PipelineParameters).para_srctable' cannot be evaluated because property 'para_srctable' doesn't exist, available properties are 'para_filenamesrc, para_filenamesink'.
+
+
+The function 'json' expects its parameter to be a string or an XML. The provided value is of type 'Null'.
+
+
+Expressions for Set Variable Activities
+For src_filename:
+json
+Copy code
+@if(not(empty(item().PipelineParameters)), if(contains(item().PipelineParameters, 'para_filenamesrc'), json(item().PipelineParameters).para_filenamesrc, ''), '')
+For sin_filename:
+json
+Copy code
+@if(not(empty(item().PipelineParameters)), if(contains(item().PipelineParameters, 'para_filenamesink'), json(item().PipelineParameters).para_filenamesink, ''), '')
+For src_table:
+json
+Copy code
+@if(not(empty(item().PipelineParameters)), if(contains(item().PipelineParameters, 'para_srctable'), json(item().PipelineParameters).para_srctable, ''), '')
+For sink_table:
+json
+Copy code
+@if(not(empty(item().PipelineParameters)), if(contains(item().PipelineParameters, 'para_sinktable'), json(item().PipelineParameters).para_sinktable, ''), '')
+Explanation:
+not(empty(item().PipelineParameters)):
+
+This checks if the PipelineParameters field is not null or empty.
+contains(item().PipelineParameters, 'para_filenamesrc'):
+
+This checks if the PipelineParameters field contains the key para_filenamesrc.
+json(item().PipelineParameters).para_filenamesrc:
+
+This extracts the value associated with the key para_filenamesrc from the PipelineParameters JSON string.
+'':
+
+This provides a default empty string value in case the key is not present.
+
+========================= ========================= =============================== ============================================ ================================= =======================
+
+My table dev.pipelines2::
+
+Pk_PipelineID	PipelineName				Description			PipelineParameters							Stage	ExecutionOrder	ParentPipelineID	SourceTypes
+101		PL_Copy2WheelsData	Copy the Src file to Raw layer		{para_filenamesrc : "2-WheelSales.csv", para_filenamesink: "2-WheelSData.csv"}	Raw Zone	1		NULL			CSV
+102		PL_Copy4WheelsData	Copy the Src file to Raw layer		{para_filenamesrc : "4-WheelSales.csv", para_filenamesink: "4-WheelSData.csv"}	Raw Zone	2		NULL			CSV
+103		PL_TRANSFORM2WHEELS	Data preprocessing from Raw to silver			NULL								Silver Zone	3		101			SQL
+104		PL_TRANSFORM4WHEELS	Data preprocessing from raw to silver			NULL								Silver Zone	4		102			SQL
+105		PL_RESTAPI		Copy Data from api					NULL								Raw Zone	5		NULL			API
+106		PL_HOLIDAYSDATA		Copy Data from one table to another	{para_srctable : "projectallocation_92", para_sinktable: "projectallocation_96"}Raw Zone	6		NULL			SQL
+
+
+
+Query in Lookup ::
+
+Select * from dev.pipelines2 where Stage = 'Raw Zone';
+
+{
+    "name": "PL_RAWLAYERMASTER",
+    "properties": {
+        "activities": [
+            {
+                "name": "Lookup1",
+                "type": "Lookup",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "SqlServerSource",
+                        "sqlReaderQuery": {
+                            "value": "Select * from dev.pipelines2 where Stage = 'Raw Zone';",
+                            "type": "Expression"
+                        },
+                        "queryTimeout": "02:00:00",
+                        "partitionOption": "None"
+                    },
+                    "dataset": {
+                        "referenceName": "DS_SQLSERVER_PIPELINES",
+                        "type": "DatasetReference"
+                    },
+                    "firstRowOnly": false
+                }
+            },
+            {
+                "name": "ForEach1",
+                "type": "ForEach",
+                "dependsOn": [
+                    {
+                        "activity": "Lookup1",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "items": {
+                        "value": "@activity('Lookup1').output.value",
+                        "type": "Expression"
+                    },
+                    "isSequential": true,
+                    "activities": [
+                        {
+                            "name": "set_src_filenames",
+                            "type": "SetVariable",
+                            "dependsOn": [],
+                            "policy": {
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "variableName": "src_filename",
+                                "value": {
+                                    "value": "@if(not(empty(item().PipelineParameters)), if(contains(item().PipelineParameters, 'para_filenamesrc'), json(item().PipelineParameters).para_filenamesrc, ''), '')",
+                                    "type": "Expression"
+                                }
+                            }
+                        },
+                        {
+                            "name": "set_sink_filnames",
+                            "type": "SetVariable",
+                            "dependsOn": [],
+                            "policy": {
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "variableName": "sink_filename",
+                                "value": {
+                                    "value": "@if(not(empty(item().PipelineParameters)), if(contains(item().PipelineParameters, 'para_filenamesink'), json(item().PipelineParameters).para_filenamesink, ''), '')",
+                                    "type": "Expression"
+                                }
+                            }
+                        },
+                        {
+                            "name": "Switch1",
+                            "type": "Switch",
+                            "dependsOn": [
+                                {
+                                    "activity": "set_src_filenames",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                {
+                                    "activity": "set_sink_filnames",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                {
+                                    "activity": "set_Src_tnames",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                {
+                                    "activity": "set_Sink_tnames",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            ],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "on": {
+                                    "value": "@item().SourceTypes",
+                                    "type": "Expression"
+                                },
+                                "cases": [
+                                    {
+                                        "value": "CSV",
+                                        "activities": [
+                                            {
+                                                "name": "Copy data1",
+                                                "type": "Copy",
+                                                "dependsOn": [],
+                                                "policy": {
+                                                    "timeout": "0.12:00:00",
+                                                    "retry": 0,
+                                                    "retryIntervalInSeconds": 30,
+                                                    "secureOutput": false,
+                                                    "secureInput": false
+                                                },
+                                                "userProperties": [],
+                                                "typeProperties": {
+                                                    "source": {
+                                                        "type": "DelimitedTextSource",
+                                                        "storeSettings": {
+                                                            "type": "AzureBlobFSReadSettings",
+                                                            "recursive": true,
+                                                            "enablePartitionDiscovery": false
+                                                        },
+                                                        "formatSettings": {
+                                                            "type": "DelimitedTextReadSettings"
+                                                        }
+                                                    },
+                                                    "sink": {
+                                                        "type": "DelimitedTextSink",
+                                                        "storeSettings": {
+                                                            "type": "AzureBlobFSWriteSettings"
+                                                        },
+                                                        "formatSettings": {
+                                                            "type": "DelimitedTextWriteSettings",
+                                                            "quoteAllText": true,
+                                                            "fileExtension": ".txt"
+                                                        }
+                                                    },
+                                                    "enableStaging": false,
+                                                    "translator": {
+                                                        "type": "TabularTranslator",
+                                                        "typeConversion": true,
+                                                        "typeConversionSettings": {
+                                                            "allowDataTruncation": true,
+                                                            "treatBooleanAsNumber": false
+                                                        }
+                                                    }
+                                                },
+                                                "inputs": [
+                                                    {
+                                                        "referenceName": "DS_ADLS_CSVTYPES",
+                                                        "type": "DatasetReference",
+                                                        "parameters": {
+                                                            "PARA_FILENAME": {
+                                                                "value": "@variables('src_filename')",
+                                                                "type": "Expression"
+                                                            }
+                                                        }
+                                                    }
+                                                ],
+                                                "outputs": [
+                                                    {
+                                                        "referenceName": "DS_ADLS_SINK_GENERIC",
+                                                        "type": "DatasetReference",
+                                                        "parameters": {
+                                                            "PARA_FILENAME": {
+                                                                "value": "@variables('sink_filename')",
+                                                                "type": "Expression"
+                                                            }
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "value": "API",
+                                        "activities": [
+                                            {
+                                                "name": "ACT_GEN_WEB_GETEMP",
+                                                "type": "WebActivity",
+                                                "dependsOn": [],
+                                                "policy": {
+                                                    "timeout": "0.12:00:00",
+                                                    "retry": 0,
+                                                    "retryIntervalInSeconds": 30,
+                                                    "secureOutput": false,
+                                                    "secureInput": false
+                                                },
+                                                "userProperties": [],
+                                                "typeProperties": {
+                                                    "method": "GET",
+                                                    "url": "https://dummy.restapiexample.com/api/v1/employees"
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "value": "SQL",
+                                        "activities": [
+                                            {
+                                                "name": "Copy data2",
+                                                "type": "Copy",
+                                                "dependsOn": [],
+                                                "policy": {
+                                                    "timeout": "0.12:00:00",
+                                                    "retry": 0,
+                                                    "retryIntervalInSeconds": 30,
+                                                    "secureOutput": false,
+                                                    "secureInput": false
+                                                },
+                                                "userProperties": [],
+                                                "typeProperties": {
+                                                    "source": {
+                                                        "type": "SqlServerSource",
+                                                        "queryTimeout": "02:00:00",
+                                                        "partitionOption": "None"
+                                                    },
+                                                    "sink": {
+                                                        "type": "SqlServerSink",
+                                                        "writeBehavior": "insert",
+                                                        "sqlWriterUseTableLock": false,
+                                                        "tableOption": "autoCreate"
+                                                    },
+                                                    "enableStaging": false,
+                                                    "translator": {
+                                                        "type": "TabularTranslator",
+                                                        "typeConversion": true,
+                                                        "typeConversionSettings": {
+                                                            "allowDataTruncation": true,
+                                                            "treatBooleanAsNumber": false
+                                                        }
+                                                    }
+                                                },
+                                                "inputs": [
+                                                    {
+                                                        "referenceName": "DS_SQLSERVER_GENERIC",
+                                                        "type": "DatasetReference",
+                                                        "parameters": {
+                                                            "para_table": {
+                                                                "value": "@variables('src_tname')",
+                                                                "type": "Expression"
+                                                            }
+                                                        }
+                                                    }
+                                                ],
+                                                "outputs": [
+                                                    {
+                                                        "referenceName": "DS_SQLSERVER_GENERIC_SINK",
+                                                        "type": "DatasetReference",
+                                                        "parameters": {
+                                                            "para_schema": "dev",
+                                                            "para_tname": {
+                                                                "value": "@variables('src_tname')",
+                                                                "type": "Expression"
+                                                            }
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ],
+                                "defaultActivities": [
+                                    {
+                                        "name": "Set variable1",
+                                        "type": "SetVariable",
+                                        "dependsOn": [],
+                                        "policy": {
+                                            "secureOutput": false,
+                                            "secureInput": false
+                                        },
+                                        "userProperties": [],
+                                        "typeProperties": {
+                                            "variableName": "default",
+                                            "value": "Got the SourceTypes which are not in the mentioned cases... "
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "name": "set_Src_tnames",
+                            "type": "SetVariable",
+                            "dependsOn": [],
+                            "policy": {
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "variableName": "src_tname",
+                                "value": {
+                                    "value": "@if(not(empty(item().PipelineParameters)), if(contains(item().PipelineParameters, 'para_srctable'), json(item().PipelineParameters).para_srctable, ''), '')",
+                                    "type": "Expression"
+                                }
+                            }
+                        },
+                        {
+                            "name": "set_Sink_tnames",
+                            "type": "SetVariable",
+                            "dependsOn": [],
+                            "policy": {
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "variableName": "sink_tname",
+                                "value": {
+                                    "value": "@if(not(empty(item().PipelineParameters)), if(contains(item().PipelineParameters, 'para_sinktable'), json(item().PipelineParameters).para_sinktable, ''), '')",
+                                    "type": "Expression"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        ],
+        "variables": {
+            "src_filename": {
+                "type": "String"
+            },
+            "sink_filename": {
+                "type": "String"
+            },
+            "default": {
+                "type": "String"
+            },
+            "src_tname": {
+                "type": "String"
+            },
+            "sink_tname": {
+                "type": "String"
+            },
+            "message": {
+                "type": "String"
+            },
+            "test": {
+                "type": "String"
+            }
+        },
+        "folder": {
+            "name": "Generic"
+        },
+        "annotations": []
+    }
+}
+
+This is the Pipeline Json code which has been executing perfectly, 
+Now i'll store the logs in this Table.. 
+
+CREATE TABLE dev.runactivity2 (
+    Pk_RunActivityID INT identity(1,1) PRIMARY KEY,
+	PipelineRunID nvarchar(max) ,
+    ErrorMessage NVARCHAR(MAX),         
+    RunDate DATETIME,                   
+    ActivityStartTime DATETIME,          
+    ActivityEndTime DATETIME,
+	CompletedStage nvarchar(max),
+	SourceType nvarchar(max), 
+    Fk_PipelineID INT,
+    FOREIGN KEY (Fk_PipelineID) REFERENCES dev.pipelines2(Pk_PipelineID)  
+);
+
+But here how i can retrive the Pk_PipelineID values dynamically and store it in Fk_PipelineID 
+
+Give the Design steps and Flow, don't give the JSON CODE AGAIN
+
+
+===================== =============================== =========================================== ======================================= ==========================
+
+Pk_RunActivityID	PipelineRunID			ErrorMessage	RunDate			ActivityStartTime	ActivityEndTime		CompletedStage	Fk_PipelineID
+1		f2ec71d7-2e23-4040-9e43-eedae473b3c3	Succeeded	2024-06-25 13:30:16.647	2024-06-25 13:30:27.010	2024-06-25 13:30:45.800		Raw	101
+2		f2ec71d7-2e23-4040-9e43-eedae473b3c3	Succeeded	2024-06-25 13:30:16.647	2024-06-25 13:30:54.910	2024-06-25 13:31:18.453		Raw	102
+3		f2ec71d7-2e23-4040-9e43-eedae473b3c3	Succeeded	2024-06-25 13:30:16.647	2024-06-25 13:31:27.047	2024-06-25 13:31:33.970		Raw	105
+4		f2ec71d7-2e23-4040-9e43-eedae473b3c3	Failed		2024-06-25 13:30:16.647	2024-06-25 13:31:44.783	2024-06-25 13:32:00.083		Raw	106
+
+this is my run activity table.. Now design a Pipeline in ADF which will take up the ErrorMessage  column, take out the failed ErrorMessage value, if their are no Error Message value = Failed, then send email all success 
+
+i would like to utilize the Below Query in the Lookup ::
+
+
+select re.PipelineRunID , dp.PipelineName, dp.PipelineParameters, dp.Sourcetypes from dev.runactivity re
+join dev.pipelines2 dp on dp.Pk_PipelineID = re.Fk_PipelineID
+
+========== ======================= =============================== ================================================================== ========================== ============================
+Table :: dev.Pipelines2 
+
+Pk_PipelineID	PipelineName			Description			PipelineParameters									Stage		ExecutionOrder	ParentPipelineID	SourceTypes	Status
+101		PL_Copy2WheelsData	Copy the Src file to Raw layer		{para_filenamesrc : "2-WheelSales.csv", para_filenamesink: "2-WheelSData.csv"}		Raw Zone	1		NULL				CSV	Y    
+102		PL_Copy4WheelsData	Copy the Src file to Raw layer		{para_filenamesrc : "4-WheelSales.csv", para_filenamesink: "4-WheelSData.csv"}		Raw Zone	2		NULL				CSV	Y    
+103		PL_TRANSFORM2WHEELS	Data preprocessing from Raw to silver	NULL											Silver Zone	3		101				SQL	Y    
+104		PL_TRANSFORM4WHEELS	Data preprocessing from raw to silver	NULL											Silver Zone	4		102				SQL	Y    
+105		PL_RESTAPI		Copy Data from api			NULL											Raw Zone	5		NULL				API	Y    
+106		PL_HOLIDAYSDATA		Copy Data from one table to another	{para_srctable : "projectallocation_92", para_sinktable: "projectallocation_96"}	Raw Zone	6		NULL				SQL	Y    
+
+Table :: dev.runactivity
+
+Pk_RunActivityID	PipelineRunID	ErrorMessage	RunDate	ActivityStartTime	ActivityEndTime	CompletedStage	Fk_PipelineID	IsRunning
+
+
+i want to design the Pipeline in ADF in such a way that Lookup on runactivity table and write a Query in order to Bring the PipelineName, Pk_PipelineId, ErrorMessage, SourceTypes by joining Piplines and runactivity table where RunDate = getdate() 
+
+
+I designed the Pipeline In ADF like this 
+
+Lkp >> Filter_failed >>for each  
+    >> Filter_success
+
+Query used in Lkp ::
+
+select re.PipelineRunID , re.ErrorMessage,dp.PipelineName, dp.PipelineParameters, dp.Sourcetypes , dp.Pk_PipelineID from dev.runactivity re
+join dev.pipelines2 dp on dp.Pk_PipelineID = re.Fk_PipelineID where Stage = 'Raw Zone';
+
+condition in Filter_failed :: @equals(item().ErrorMessage, 'Failed')
+condition in Filter_succees :: @equals(item().ErrorMessage, 'Succeeded')
+
+But Now my Question is if their is Failed it will go For each.. But if their is no failed message i need to skip the Foreach 
+
+
+According to Our condition we need to do lookup on RunActivity Table and Run the Raw Zone layers activites according to SourceTypes right?
+
+when you do lookup on Run Activity on current_date() then we will get Empty Table , How can an Empty Table values of array can iterate through for each
+
+====================== ============================================= ============
+
+PipelineRunID	ErrorMessage	rundate	PipelineName			PipelineParameters								Sourcetypes	Pk_PipelineID
+NULL		NULL		NULL	PL_Copy2WheelsData	{para_filenamesrc : "2-WheelSales.csv", para_filenamesink: "2-WheelSData.csv"}		CSV			101
+NULL		NULL		NULL	PL_Copy4WheelsData	{para_filenamesrc : "4-WheelSales.csv", para_filenamesink: "4-WheelSData.csv"}		CSV			102
+NULL		NULL		NULL	PL_RESTAPI			NULL										API			105
+NULL		NULL		NULL	PL_HOLIDAYSDATA		{para_srctable : "projectallocation_92", para_sinktable: "projectallocation_96"}	SQL			106
+
+
+
+i got the above output from the following query::
+
+select re.PipelineRunID , re.ErrorMessage,re.rundate,dp.PipelineName, dp.PipelineParameters, dp.Sourcetypes , dp.Pk_PipelineID from dev.pipelines2 dp
+left join dev.runactivity re  on dp.Pk_PipelineID = re.Fk_PipelineID where Stage = 'Raw Zone'
+
+But when i add another filter condition on top of rundate = getdate() , i'm getting empty values..
+
+The scenario what i'm working for Do lookup using the Query filter ErrorMessage = 'Null' or Failed along with Rundate = utcNow()
+
+
+@or(equals(item().ErrorMessage, null), equals(item().ErrorMessage, 'Failed'), equals(item().isrunning, null) )
+
+error : Or doesn't accept 3 arguments
+
+---------- ------------------------------------------ ------------------------------ ----------
+
+ALTER PROCEDURE dev.sp_InsertRunActivity2
+    @pipelineRunId NVARCHAR(MAX),
+    @ErrorMessage NVARCHAR(MAX),
+    @RunDate DATETIME,
+    @ActivityStartTime DATETIME,
+    @ActivityEndTime DATETIME,
+    @completedstage NVARCHAR(MAX),
+    @Fk_PipelineID INT
+AS
+BEGIN
+    DECLARE @isrunning NVARCHAR(1);
+
+    -- Set the value of @isrunning based on @ErrorMessage
+    IF @ErrorMessage = 'Failed'
+        SET @isrunning = 'Y';
+    ELSE
+        SET @isrunning = 'N';
+
+
+    INSERT INTO dev.runactivity (
+        pipelinerunid,
+        ErrorMessage,
+        RunDate,
+        ActivityStartTime,
+        ActivityEndTime,
+        CompletedStage,
+        isrunning,
+        Fk_PipelineID
+    )
+    VALUES (
+        @pipelineRunId,
+        @ErrorMessage,
+        @RunDate,
+        @ActivityStartTime,
+        @ActivityEndTime,
+        @completedstage,
+        @isrunning,
+        @Fk_PipelineID
+    );
+END;
+
+
+
+============================= ===========  ===============
+
+runactivity table ::
+
+PipelineRunID				Status			rundate		PipelineName			PipelineParameters							Sourcetypes	Pk_PipelineID	IsActive
+7fe0b98f-0857-4528-92bb-ccd6f865303b	Succeeded	2024-06-26 14:04:54.753	PL_Copy2WheelsData	{para_filenamesrc : "2-WheelSales.csv", para_filenamesink: "2-WheelSData.csv"}		CSV	101			1
+7fe0b98f-0857-4528-92bb-ccd6f865303b	Succeeded	2024-06-26 14:05:20.550	PL_Copy4WheelsData	{para_filenamesrc : "4-WheelSales.csv", para_filenamesink: "4-WheelSData.csv"}		CSV	102			1
+7fe0b98f-0857-4528-92bb-ccd6f865303b	Succeeded	2024-06-26 14:04:30.087	PL_RESTAPI			NULL										API	105			1
+7fe0b98f-0857-4528-92bb-ccd6f865303b	Failed		2024-06-26 14:04:30.087	PL_HOLIDAYSDATA		{para_srctable : "projectallocation_92", para_sinktable: "projectallocation_96"}	SQL	106			1
+00d0e2b5-c0cf-4efb-9454-c4399c460c34	Succeeded	2024-06-26 14:07:01.650	PL_HOLIDAYSDATA		{para_srctable : "projectallocation_92", para_sinktable: "projectallocation_96"}	SQL	106			1
+
+
+ALTER PROCEDURE dev.sp_InsertRunActivity2
+    @pipelineRunId NVARCHAR(MAX),
+    @ErrorMessage NVARCHAR(MAX),
+    @RunDate DATETIME,
+    @ActivityStartTime DATETIME,
+    @ActivityEndTime DATETIME,
+    @completedstage NVARCHAR(MAX),
+    @Fk_PipelineID INT
+AS
+BEGIN
+
+    INSERT INTO dev.runactivity (
+        pipelinerunid,
+        Status,
+        RunDate,
+        ActivityStartTime,
+        ActivityEndTime,
+        CompletedStage,
+        Fk_PipelineID
+    )
+    VALUES (
+        @pipelineRunId,
+        @ErrorMessage,
+        @RunDate,
+        @ActivityStartTime,
+        @ActivityEndTime,
+        @completedstage,
+        @Fk_PipelineID
+    );
+END; 
+
+this is the Store proc i written i order to insert values into table.
+
+i used below Query in the Lookup in ADF :
+
+
+SELECT 
+    re.PipelineRunID, 
+    re.Status, 
+    re.rundate, 
+    dp.PipelineName, 
+    dp.PipelineParameters, 
+    dp.Sourcetypes, 
+    dp.Pk_PipelineID ,
+	dp.IsActive
+FROM 
+    dev.pipelines2 dp
+LEFT JOIN 
+    dev.runactivity re  
+ON 
+    dp.Pk_PipelineID = re.Fk_PipelineID 
+WHERE 
+    dp.Stage = 'Raw Zone' 
+   AND (dp.IsActive = 1)
+   or CAST(re.rundate AS DATE) = CAST(GETDATE() AS DATE);
+
+then filter :: 
+@or(equals(item().Status, null), equals(item().Status, 'Failed')) filtering out Status= 'Failed'
+
+then it enter into for loop and run the particular failed Pipelinename
+
+next time again when i do lookup on runactivity table with the Query given.. There would be the Failed value in status column and it's filtering again.. 
+
+How to resolve this 
+
+
+ALTER PROCEDURE dev.sp_UpdateRunActivityStatus
+    @pipelineRunId NVARCHAR(MAX),
+    @Status NVARCHAR(MAX),
+    @EndDateTime DATETIME
+AS
+BEGIN
+    UPDATE dev.runactivity
+    SET 
+        Status = @Status,
+        ActivityEndTime = @EndDateTime
+    WHERE 
+        pipelinerunid = @pipelineRunId;
+END;
+
+=============== ====================== ======================= =====================
+
+ALTER PROCEDURE dev.sp_InsertOrUpdateRunActivity
+    @pipelineRunId NVARCHAR(MAX),
+    @ErrorMessage NVARCHAR(MAX),
+    @RunDate DATETIME,
+    @ActivityStartTime DATETIME,
+    @ActivityEndTime DATETIME,
+    @completedstage NVARCHAR(MAX),
+    @Fk_PipelineID INT
+AS
+BEGIN
+    -- Check if the record exists
+    IF EXISTS (SELECT 1 FROM dev.runactivity WHERE Fk_PipelineID = @Fk_PipelineID AND CAST(RunDate AS DATE) = CAST(@RunDate AS DATE))
+    BEGIN
+        -- Update the existing record
+        UPDATE dev.runactivity
+        SET 
+            Status = @ErrorMessage,
+            RunDate = @RunDate,
+            ActivityStartTime = @ActivityStartTime,
+            ActivityEndTime = @ActivityEndTime,
+            CompletedStage = @completedstage,
+            Fk_PipelineID = @Fk_PipelineID
+        WHERE 
+            Fk_PipelineID = @Fk_PipelineID AND CAST(RunDate AS DATE) = CAST(@RunDate AS DATE);
+    END
+    ELSE
+    BEGIN
+        -- Insert a new record
+        INSERT INTO dev.runactivity (
+            pipelinerunid,
+            Status,
+            RunDate,
+            ActivityStartTime,
+            ActivityEndTime,
+            CompletedStage,
+            Fk_PipelineID
+        )
+        VALUES (
+            @pipelineRunId,
+            @ErrorMessage,
+            @RunDate,
+            @ActivityStartTime,
+            @ActivityEndTime,
+            @completedstage,
+            @Fk_PipelineID
+        );
+    END
+END;
+
+
+ids
+var_sttime
+var_src_filename
+var_sink_filename
+var_src_tname
+var_sink_tnames
+
+================================ ======================================= ======================================================== ====================== =====
+
+create table dev.ColumnDetails (
+Pk_ColumnDetails int primary key not null,                              
+SourceTypes nvarchar(max),
+SourceColumnName nvarchar(max),
+TargetColumnName nvarchar(max),
+ColumnTypes nvarchar(max),
+IsNullable int, 
+IsActive int,
+Fk_ActivityID int
+FOREIGN KEY (Fk_ActivityID) REFERENCES dev.entity(Pk_ActivityID) 
+);
+
+Pk_ColumnDetails	SourceTypes		SourceColumnName																							TargetColumnName																			ColumnTypes	IsNullable	IsActive	Fk_ActivityID
+101			CSV		[OEM, Model, Segment, Month, Year, NoOfSales, EngineCapacity, Mileage, Model Price, Dealer location, Region]												[OEM,Model,Segment,Month,Year]																					0		1		2
+102			CSV		[Brand, Model, Body Type, FUEL TYPE, Mileage, ENGINE, TRANSMISSION, Price range, Fuel Capacity (L), Seating Capacity, Top_Speed in Km/h, No Of Cylinders, Year Of Sale, Month Of Sale , Country, City]	[Brand, Model, BodyType, FUELTYPE, Mileage, ENGINE, TRANSMISSION, Pricerange, FuelCapacity, SeatingCapacity, Top_Speed, NoOfCylinders, YearOfSale, MonthOfSale, Country, City]			0		1		3
+
+
+
+for the above table i written the storeporc like this 
+ALTER PROCEDURE [dev].[sp_GetColumnMappingActivity]
+  @ParameterValueSink NVARCHAR(100) 
+AS
+BEGIN
+  DECLARE @json_construct NVARCHAR(MAX) = '{"type": "TabularTranslator", "mappings": [X], "typeConversion":true,"typeConversionSettings":{"allowDataTruncation":true,"treatBooleanAsNumber":false}}';
+  DECLARE @sourceColumns NVARCHAR(MAX);
+  DECLARE @targetColumns NVARCHAR(MAX);
+
+  -- Retrieve the source and target column lists
+  SELECT 
+    @sourceColumns = SourceColumnName, 
+    @targetColumns = TargetColumnName
+  FROM v_test
+  WHERE ParameterValueSink = @ParameterValueSink;
+
+  -- Split the source and target column lists into table variables
+  DECLARE @sourceTable TABLE (ColumnName NVARCHAR(MAX));
+  DECLARE @targetTable TABLE (ColumnName NVARCHAR(MAX));
+
+  INSERT INTO @sourceTable (ColumnName)
+  SELECT TRIM(value) FROM STRING_SPLIT(REPLACE(REPLACE(@sourceColumns, '[', ''), ']', ''), ',');
+
+  INSERT INTO @targetTable (ColumnName)
+  SELECT TRIM(value) FROM STRING_SPLIT(REPLACE(REPLACE(@targetColumns, '[', ''), ']', ''), ',');
+
+  -- Combine the source and target columns into JSON
+  DECLARE @json NVARCHAR(MAX);
+  SET @json = (
+    SELECT 
+      st.ColumnName AS 'source.name',
+      'String' AS 'source.type',
+      'String' AS 'source.physicalType',
+      tt.ColumnName AS 'sink.name',
+      'String' AS 'sink.type',
+      'String' AS 'sink.physicalType'
+    FROM @sourceTable st
+    JOIN @targetTable tt ON REPLACE(REPLACE(st.ColumnName, ' ', ''), '(', '') = REPLACE(REPLACE(tt.ColumnName, ' ', ''), '(', '')
+    FOR JSON PATH
+  );
+
+  -- Combine the JSON string with the JSON construct
+  SET @json = REPLACE(@json_construct, '[X]', @json);
+
+  -- Return the final JSON output
+  SELECT @json AS json_output;
+END;
+
+when i'm executing for 4-wheels 
+
+i got the json value like this 
+
+{
+    "type": "TabularTranslator",
+    "mappings": [
+        {
+            "source": {
+                "name": "Body Type",
+                "type": "String",
+                "physicalType": "String"
+            },
+            "sink": {
+                "name": "BodyType",
+                "type": "String",
+                "physicalType": "String"
+            }
+        },
+        {
+            "source": {
+                "name": "Brand",
+                "type": "String",
+                "physicalType": "String"
+            },
+            "sink": {
+                "name": "Brand",
+                "type": "String",
+                "physicalType": "String"
+            }
+        },
+        {
+            "source": {
+                "name": "City",
+                "type": "String",
+                "physicalType": "String"
+            },
+            "sink": {
+                "name": "City",
+                "type": "String",
+                "physicalType": "String"
+            }
+        },
+        {
+            "source": {
+                "name": "Country",
+                "type": "String",
+                "physicalType": "String"
+            },
+            "sink": {
+                "name": "Country",
+                "type": "String",
+                "physicalType": "String"
+            }
+        },
+        {
+            "source": {
+                "name": "ENGINE",
+                "type": "String",
+                "physicalType": "String"
+            },
+            "sink": {
+                "name": "ENGINE",
+                "type": "String",
+                "physicalType": "String"
+            }
+        },
+        {
+            "source": {
+                "name": "FUEL TYPE",
+                "type": "String",
+                "physicalType": "String"
+            },
+            "sink": {
+                "name": "FUELTYPE",
+                "type": "String",
+                "physicalType": "String"
+            }
+        },
+        {
+            "source": {
+                "name": "Mileage",
+                "type": "String",
+                "physicalType": "String"
+            },
+            "sink": {
+                "name": "Mileage",
+                "type": "String",
+                "physicalType": "String"
+            }
+        },
+        {
+            "source": {
+                "name": "Model",
+                "type": "String",
+                "physicalType": "String"
+            },
+            "sink": {
+                "name": "Model",
+                "type": "String",
+                "physicalType": "String"
+            }
+        },
+        {
+            "source": {
+                "name": "Month Of Sale",
+                "type": "String",
+                "physicalType": "String"
+            },
+            "sink": {
+                "name": "MonthOfSale",
+                "type": "String",
+                "physicalType": "String"
+            }
+        },
+        {
+            "source": {
+                "name": "No Of Cylinders",
+                "type": "String",
+                "physicalType": "String"
+            },
+            "sink": {
+                "name": "NoOfCylinders",
+                "type": "String",
+                "physicalType": "String"
+            }
+        },
+        {
+            "source": {
+                "name": "Price range",
+                "type": "String",
+                "physicalType": "String"
+            },
+            "sink": {
+                "name": "Pricerange",
+                "type": "String",
+                "physicalType": "String"
+            }
+        },
+        {
+            "source": {
+                "name": "Seating Capacity",
+                "type": "String",
+                "physicalType": "String"
+            },
+            "sink": {
+                "name": "SeatingCapacity",
+                "type": "String",
+                "physicalType": "String"
+            }
+        },
+        {
+            "source": {
+                "name": "TRANSMISSION",
+                "type": "String",
+                "physicalType": "String"
+            },
+            "sink": {
+                "name": "TRANSMISSION",
+                "type": "String",
+                "physicalType": "String"
+            }
+        },
+        {
+            "source": {
+                "name": "Year Of Sale",
+                "type": "String",
+                "physicalType": "String"
+            },
+            "sink": {
+                "name": "YearOfSale",
+                "type": "String",
+                "physicalType": "String"
+            }
+        }
+    ],
+    "typeConversion": true,
+    "typeConversionSettings": {
+        "allowDataTruncation": true,
+        "treatBooleanAsNumber": false
+    }
+} what about Top Speed in km/h 
+
+i updated or inserted the values into table like this way 
+UPDATE dev.columndetails 
+SET SourceColumnName = '[Brand, Model, Body Type, FUEL TYPE, Mileage, ENGINE, TRANSMISSION, Price range, Fuel Capacity (L), Seating Capacity, Top_Speed in Km/h, No Of Cylinders, Year Of Sale, Month Of Sale , Country, City]',
+    TargetColumnName = '[Brand, Model, BodyType, FUELTYPE, Mileage, ENGINE, TRANSMISSION, Pricerange, FuelCapacity, SeatingCapacity, TopSpeed, NoOfCylinders, YearOfSale, MonthOfSale, Country, City]'
+WHERE Pk_ColumnDetails = 102;
+Top_Speed in km/h is written as Top_Speed 
+
+
+as you can see some of the column names Fuel Capacity(L) and Top_Speed in km/h are not selected??.. I desperately want those 
+
+
+create table dev.Entity (
+Pk_ActivityID int identity(1,1) primary key,
+ActivityName nvarchar(max),
+ActivityLayer nvarchar(max),
+IsActive char(3),
+Fk_PipelineID INT,
+FOREIGN KEY (Fk_PipelineID) REFERENCES dev.pipelines(Pk_PipelineID) 
+
+);
+
+
+CREATE TABLE dev.runactivity (
+    Pk_RunActivityID INT identity(1,1) PRIMARY KEY,
+    PipelineRunID nvarchar(max) ,
+    ErrorMessage NVARCHAR(MAX),         
+    RunDate DATETIME,                   
+    ActivityStartTime DATETIME,   
+    CompletedStage varchar(50),       
+    ActivityEndTime DATETIME,            
+    Fk_PipelineID INT,
+    FOREIGN KEY (Fk_PipelineID) REFERENCES dev.pipelines(Pk_PipelineID)  
+);
+
+
+
+create table dev.pipelines2 (
+Pk_PipelineID int primary key ,
+PipelineName nvarchar(max),
+Description nvarchar(max),
+PipelineParameters nvarchar(max),
+Stage NVARCHAR(50) NOT NULL,
+IsActivie int
+);
+
+
+
+
+dev.pipelines2
+
+
+Pk_PipelineID	PipelineName				Description			PipelineParameters								Stage	ExecutionOrder	ParentPipelineID	SourceTypes	IsActive
+101		PL_Copy2WheelsData	Copy the Src file to Raw layer		{para_filenamesrc : "2-WheelSales.csv", para_filenamesink: "2-WheelSData.csv"}		Raw Zone	1	NULL				CSV	1
+102		PL_Copy4WheelsData	Copy the Src file to Raw layer		{para_filenamesrc : "4-WheelSales.csv", para_filenamesink: "4-WheelSData.csv"}		Raw Zone	2	NULL				CSV	1
+103		PL_TRANSFORM2WHEELS	Data preprocessing from Raw to silver			NULL									Silver Zone	3	101				CSV	1
+104		PL_TRANSFORM4WHEELS	Data preprocessing from raw to silver			NULL									Silver Zone	4	102				CSV	1
+105		PL_RESTAPI		Copy Data from api					NULL									Raw Zone	5	NULL				API	1
+106		PL_HOLIDAYSDATA		Copy Data from one table to another	{para_srctable : "projectallocation_92", para_sinktable: "projectallocation_96"}	Raw Zone	6	NULL				SQL	1
+
+
+dev.runactivity
+
+Pk_RunActivityID	PipelineRunID			Status			RunDate		ActivityStartTime	ActivityEndTime		CompletedStage	Fk_PipelineID
+1		bdd1dc49-d9d7-4f5d-ace9-4955613340cf	Succeeded	2024-06-28 00:00:00.000	2024-06-28 06:04:12.630	2024-06-28 06:04:27.960		Raw	101
+2		bdd1dc49-d9d7-4f5d-ace9-4955613340cf	Succeeded	2024-06-28 00:00:00.000	2024-06-28 06:04:37.127	2024-06-28 06:04:51.687		Raw	102
+3		bdd1dc49-d9d7-4f5d-ace9-4955613340cf	Succeeded	2024-06-28 00:00:00.000	2024-06-28 06:05:02.073	2024-06-28 06:05:09.363		Raw	105
+4		bdd1dc49-d9d7-4f5d-ace9-4955613340cf	Succeeded	2024-06-28 00:00:00.000	2024-06-28 06:31:26.403	2024-06-28 06:31:39.653		Raw	106
+
+
+Query /Table in PL_RAW_MASTER LOOKUP ::
+
+create view dev.V_RawLayerExeLkp as
+SELECT 
+    re.PipelineRunID, 
+    re.Status, 
+    re.rundate, 
+    dp.PipelineName, 
+    dp.PipelineParameters, 
+    dp.Sourcetypes, 
+    dp.Pk_PipelineID,
+    dp.IsActive
+FROM 
+    dev.pipelines2 dp
+LEFT JOIN 
+    dev.runactivity re  
+ON 
+    dp.Pk_PipelineID = re.Fk_PipelineID 
+    AND CAST(re.rundate AS DATE) = CAST(GETDATE() AS DATE)
+WHERE 
+    dp.Stage = 'Raw Zone' 
+    AND dp.IsActive = 1;
+
+
+PipelineRunID				Status			rundate		PipelineName				PipelineParameters							Sourcetypes	Pk_PipelineID	IsActive
+null					null			null		PL_Copy2WheelsData	{"para_filenamesrc": "2-WheelSales.csv", "para_filenamesink": "2-WheelSData.csv"}	CSV			101	1
+null					null			null		PL_Copy4WheelsData	{"para_filenamesrc": "4-WheelSales.csv", "para_filenamesink": "4-WheelSData.csv"}	CSV			102	1
+null					null			null		PL_RESTAPI				NULL									API			105	1
+null					null			null		PL_HOLIDAYSDATA		{para_srctable : "projectallocation_92", para_sinktable: "projectallocation_96"}	SQL			106	1
+
+
+
+
+dev.Entity Table
+
+Pk_ActivityID	ActivityName		ActivityLayer	IsActive	Fk_PipelineID
+1		ACT_MT_COPYCSVSOURCES	RawLayer	Y  			101
+2		ACT_GEN_SPROC_CSVLOGS	RawLayer	Y  			101
+3		ACT_MT_COPYCSVSOURCES	RawLayer	Y  			102
+4		ACT_GEN_SPROC_CSVLOGS	RawLayer	Y  			102
+
+
+
+
+SELECT 
+    p.PipelineName, p.PipelineName, e.Pk_ActivityID, p.sourcetypes,
+    CASE
+        WHEN p.PipelineParameters LIKE '%para_filenamesink%' THEN JSON_VALUE(p.PipelineParameters, '$.para_filenamesink')
+        WHEN p.PipelineParameters LIKE '%para_sinktable%' THEN JSON_VALUE(p.PipelineParameters, '$.para_sinktable')
+    END AS ParameterValueSink
+FROM 
+    dev.pipelines2 p
+JOIN 
+    dev.Entity e 
+ON 
+    p.Pk_PipelineID = e.Fk_PipelineID
+WHERE 
+    p.stage = 'Raw Zone' 
+    AND p.IsActive = 1;
+
+now join with dev.columndetails 
+
+
+
+
+
+PipelineName		PipelineName		Pk_ActivityID	sourcetypes	ParameterValueSink
+PL_Copy2WheelsData	PL_Copy2WheelsData		1	CSV		2-WheelSData.csv
+PL_Copy2WheelsData	PL_Copy2WheelsData		2	CSV		2-WheelSData.csv
+PL_Copy4WheelsData	PL_Copy4WheelsData		3	CSV		4-WheelSData.csv
+PL_Copy4WheelsData	PL_Copy4WheelsData		4	CSV		4-WheelSData.csv     
+
+
+
+error :: 
+Msg 4506, Level 16, State 1, Procedure SilverLayerValidations, Line 2 [Batch Start Line 1089]
+Column names in each view or function must be unique. Column name 'SourceTypes' in view or function 'SilverLayerValidations' is specified more than once.
+
+Query ::
+
+create view dev.SilverLayerValidations as 
+SELECT 
+    p.PipelineName, 
+    e.Pk_ActivityID, 
+    p.sourcetypes,
+    CASE
+        WHEN p.PipelineParameters LIKE '%para_filenamesink%' THEN JSON_VALUE(p.PipelineParameters, '$.para_filenamesink')
+        WHEN p.PipelineParameters LIKE '%para_sinktable%' THEN JSON_VALUE(p.PipelineParameters, '$.para_sinktable')
+    END AS ParameterValueSink,
+    cd.SourceTypes,
+    cd.SourceColumnName,
+    cd.TargetColumnName,
+    cd.ColumnTypes,
+    cd.IsNullable,
+    cd.IsActive
+FROM 
+    dev.pipelines2 p
+JOIN 
+    dev.Entity e ON p.Pk_PipelineID = e.Fk_PipelineID
+JOIN
+    dev.columndetails cd ON e.Pk_ActivityID = cd.Fk_ActivityID
+WHERE 
+    p.stage = 'Raw Zone' 
+    AND p.IsActive = 1;
+
+client_id or app_id = 86a2d6e7-0a32-4db2-b2e7-e97c9b71d7c3
+tenant_id or Directory_id = ee08e85d-7553-4d63-ba7c-94e9b9863478
+secret_value = GKe8Q~BSqB1FM8ZLzbUtghyI2VztWWlCy9wOVbVG
+id = f2beedd3-b5fd-4efb-bcd1-1a835bf6ef00
+
+
+@variables('var_sink_filename')
+
+@split(variables('var_src_filename'), '.')[0]
+
+------------ ----------------------------------- -- --------
+['OEM', 'Model', 'Segment', 'Month', 'Year', 'NoOfSales', 'EngineCapacity', 'Mileage', 'Model Price', 'Dealer location', 'Region']
+
+[NOT_COLUMN_OR_STR] Argument `col` should be a Column or str, got generator.
+File <command-917624806396504>, line 1
+----> 1 result = df.select(*[trim(col(c) for c in df.columns)]).show()
+
+
+
+ErrorCode=ParquetInvalidColumnName,'Type=Microsoft.DataTransfer.Common.Shared.HybridDeliveryException,Message=The column name is invalid. Column name cannot contain these character:[,;{}()\n\t=],Source=Microsoft.DataTransfer.Common,'
+
+
+print(df.dtypes)
+
+output :: [('Brand', 'string'), ('Model', 'string'), ('Body Type', 'string'), ('FUEL TYPE', 'string'), ('Mileage', 'string'), ('ENGINE', 'string'), ('TRANSMISSION', 'string'), ('Price range', 'string'), ('Fuel Capacity (L)', 'int'), ('Seating Capacity', 'int'), ('Top_Speed in Km/h', 'string'), ('No Of Cylinders', 'int'), ('Year Of Sale', 'int'), ('Month Of Sale ', 'string'), ('Country', 'string'), ('City', 'string')]
+
+schema = df.dtypes
+
+================================================================ 
+
+SELECT 
+    p.PipelineName, 
+	p.Pk_PipelineID,
+    e.Pk_ActivityID, 
+    p.sourcetypes AS PipelineSourceTypes,
+    CASE
+        WHEN p.PipelineParameters LIKE '%para_filenamesrc%' THEN JSON_VALUE(p.PipelineParameters, '$.para_filenamesrc')
+        WHEN p.PipelineParameters LIKE '%para_srctable%' THEN JSON_VALUE(p.PipelineParameters, '$.para_srctable')
+    END AS ParameterValueSink,
+    cd.SourceTypes AS ColumnSourceTypes,
+    cd.SourceColumnName,
+    cd.TargetColumnName,
+    -- cd.ColumnTypes,
+	cd.sourcecolumntypes,
+    cd.IsNullable,
+    cd.IsActive,
+	re.PipelineRunID, 
+    re.Status, 
+    re.rundate
+FROM 
+    dev.pipelines2 p
+JOIN 
+    dev.Entity e ON p.Pk_PipelineID = e.Fk_PipelineID
+JOIN
+    dev.columndetails cd ON e.Pk_ActivityID = cd.Fk_ActivityID
+LEFT JOIN 
+    dev.runactivity re  
+ON 
+    p.Pk_PipelineID = re.Fk_PipelineID 
+    AND CAST(re.rundate AS DATE) = CAST(GETDATE() AS DATE)
+-- ------------------------------------ ---------------------------------------------------- --------------------------
+
+CREATE PROCEDURE [dev].[sp_GetColumnMappingActivity]
+  @table_name NVARCHAR(100) 
+AS
+BEGIN
+  DECLARE @json_construct NVARCHAR(MAX) = '{"type": "TabularTranslator", "mappings": [X], "typeConversion":true,"typeConversionSettings":{"allowDataTruncation":true,"treatBooleanAsNumber":false}}';
+  DECLARE @sourceColumns NVARCHAR(MAX);
+  DECLARE @targetColumns NVARCHAR(MAX);
+
+  -- Retrieve the source and target column lists
+  SELECT 
+    @sourceColumns = SourceColumnName, 
+    @targetColumns = TargetColumnName
+  FROM dev.ColumnDetails
+  WHERE FileName = @table_name;
+
+  -- Split the source and target column lists into table variables
+  DECLARE @sourceTable TABLE (ColumnName NVARCHAR(100));
+  DECLARE @targetTable TABLE (ColumnName NVARCHAR(100));
+
+  INSERT INTO @sourceTable (ColumnName)
+  SELECT TRIM(value) FROM STRING_SPLIT(REPLACE(REPLACE(@sourceColumns, '[', ''), ']', ''), ',');
+
+  INSERT INTO @targetTable (ColumnName)
+  SELECT TRIM(value) FROM STRING_SPLIT(REPLACE(REPLACE(@targetColumns, '[', ''), ']', ''), ',');
+
+  -- Combine the source and target columns into JSON
+  DECLARE @json NVARCHAR(MAX);
+  SET @json = (
+    SELECT 
+      st.ColumnName AS 'source.name',
+      'String' AS 'source.type',
+      'String' AS 'source.physicalType',
+      tt.ColumnName AS 'sink.name',
+      'String' AS 'sink.type',
+      'String' AS 'sink.physicalType'
+    FROM @sourceTable st
+    JOIN @targetTable tt ON st.ColumnName = tt.ColumnName
+    FOR JSON PATH
+  );
+
+  -- Combine the JSON string with the JSON construct
+  SET @json = REPLACE(@json_construct, '[X]', @json);
+
+  -- Return the final JSON output
+  SELECT @json AS json_output;
+END;
+
+instead of @tableName replace with @ParameterValueSink 
+also Declare variables @sourcecolumntypes use this in set @json at sink.type 
+
+Here is the below table / df example:: control_df
+PipelineName		Pk_PipelineID	Pk_ActivityID	PipelineSourceTypes	ParameterValueSink	ColumnSourceTypes				SourceColumnName																					TargetColumnName																							sourcecolumntypes								IsNullable	IsActive test
+PL_Copy2WheelsData		101		2	CSV			2-WheelSales.csv		CSV	[OEM, Model, Segment, Month, Year, NoOfSales, EngineCapacity, Mileage, Model Price, Dealer location, Region]												[OEM, Model, Segment, Month, Year, NoOfSales, EngineCapacity, Mileage, ModelPrice, Dealerlocation, Region]										[string, string, string, string, int, int, string, string, string, string, string]					0	1        2-WheelSales
+PL_Copy4WheelsData		102		3	CSV			4-WheelSales.csv		CSV	[Brand, Model, Body Type, FUEL TYPE, Mileage, ENGINE, TRANSMISSION, Price range, Fuel Capacity (L), Seating Capacity, Top_Speed in Km/h, No Of Cylinders, Year Of Sale, Month Of Sale , Country, City]	[Brand, Model, Body Type, FUELTYPE, Mileage, ENGINE, TRANSMISSION, Pricerange, FuelCapacity, SeatingCapacity, Top_Speed, NoOfCylinders, YearOfSale, MonthOfSale , Country, City]	[string, string, string, string, string, string, string, string, int, int, string, int, int, string, string, string]	0	1        4-WheelSales
+
+
+def schema_mappings (filepaths):
+    try:
+         file_info = dbutils.fs.ls(filepaths)
+        #  print(file_info)
+
+         file_paths = [file.path for file in file_info]
+        #  print(file_paths)
+
+        #  paths = [f"'{file.path}'" for file in file_info]
+         dt_string = datetime.now().strftime("year=%Y/Month=%m/day=%d")
+
+         for x in file_paths:
+             
+             print(x)
+             full_path = x+dt_string
+             print(full_path)
+             dfs = spark.read.format('parquet').load(full_path)
+
+             print(dfs.printSchema())
+    except Exception as e:
+        raise e 
+
+now use the above df (control_df) i need to do schema mapping . Please not do only the schema mapping 
+
+dbfs:/mnt/genericSilver/2-WheelSales/
+dbfs:/mnt/genericSilver/2-WheelSales/year=2024/Month=07/day=03
+root
+ |-- OEM: string (nullable = true)
+ |-- Model: string (nullable = true)
+ |-- Segment: string (nullable = true)
+ |-- Month: string (nullable = true)
+ |-- Year: string (nullable = true)
+ |-- NoOfSales: string (nullable = true)
+ |-- EngineCapacity: string (nullable = true)
+ |-- Mileage: string (nullable = true)
+ |-- Region: string (nullable = true)
+
+None
+dbfs:/mnt/genericSilver/4-WheelSales/
+dbfs:/mnt/genericSilver/4-WheelSales/year=2024/Month=07/day=03
+root
+ |-- Brand: string (nullable = true)
+ |-- Model: string (nullable = true)
+ |-- Mileage: string (nullable = true)
+ |-- ENGINE: string (nullable = true)
+ |-- TRANSMISSION: string (nullable = true)
+ |-- Country: string (nullable = true)
+ |-- City: string (nullable = true)
+
+None
+
+=================================== 
+
+def schema_mappings (filepaths, reference_df):
+    try:
+
+        for row in reference_df.collect():
+            pipeline_name = row['PipelineName']
+            source_columns = row['SourceColumnName']
+            target_columns = row['TargetColumnName']
+            source_types = row['sourcecolumntypes']
+            folder_names = row['test']
+
+            print(pipeline_name)
+            print(target_columns)
+            print(source_types)
+            print(folder_names)
+
+
+            file_info = dbutils.fs.ls(filepaths)
+        #  print(file_info)
+
+            file_paths = [file.path for file in file_info]
+        #  print(file_paths)
+
+        #  paths = [f"'{file.path}'" for file in file_info]
+            dt_string = datetime.now().strftime("year=%Y/Month=%m/day=%d")
+
+            for x in file_paths:
+             
+                print(x)
+                full_path = x+dt_string
+                print(full_path)
+                dfs = spark.read.format('parquet').load(full_path)
+
+                print(dfs.printSchema())
+    except Exception as e:
+        raise e 
+        
+here is my code .. according to the folder name from control_df test column.. change the schmea 
+======================================== ========= 02-07-2024 ===================================================================================================
+
+Alter PROCEDURE [dev].[sp_GetColumnMappingActivity]
+  @table_name NVARCHAR(100) 
+AS
+BEGIN
+  DECLARE @json_construct NVARCHAR(MAX) = '{"type": "TabularTranslator", "mappings": [X], "typeConversion":true,"typeConversionSettings":{"allowDataTruncation":true,"treatBooleanAsNumber":false}}';
+  DECLARE @sourceColumns NVARCHAR(MAX);
+  DECLARE @targetColumns NVARCHAR(MAX);
+
+  -- Retrieve the source and target column lists
+  SELECT 
+    @sourceColumns = SourceColumnName, 
+    @targetColumns = TargetColumnName
+  FROM v_test -- dev.ColumnDetails 
+  -- WHERE FileName = @table_name;
+  where Pk_ColumnDetails = @table_name;
+
+  -- Split the source and target column lists into table variables
+  DECLARE @sourceTable TABLE (ColumnName NVARCHAR(max));
+  DECLARE @targetTable TABLE (ColumnName NVARCHAR(max));
+
+  INSERT INTO @sourceTable (ColumnName)
+  SELECT TRIM(value) FROM STRING_SPLIT(REPLACE(REPLACE(@sourceColumns, '[', ''), ']', ''), ',');
+
+  INSERT INTO @targetTable (ColumnName)
+  SELECT TRIM(value) FROM STRING_SPLIT(REPLACE(REPLACE(@targetColumns, '[', ''), ']', ''), ',');
+
+  -- Combine the source and target columns into JSON
+  DECLARE @json NVARCHAR(MAX);
+  SET @json = (
+    SELECT 
+      st.ColumnName AS 'source.name',
+      'String' AS 'source.type',
+      'String' AS 'source.physicalType',
+      tt.ColumnName AS 'sink.name',
+      'String' AS 'sink.type',
+      'String' AS 'sink.physicalType'
+    FROM @sourceTable st
+    JOIN @targetTable tt ON st.ColumnName = tt.ColumnName
+    FOR JSON PATH
+  );
+
+  -- Combine the JSON string with the JSON construct
+  SET @json = REPLACE(@json_construct, '[X]', @json);
+
+  -- Return the final JSON output
+  SELECT @json AS json_output;
+END;
+
+
+EXEC [dev].[sp_GetColumnMappingActivity] @table_name = 101;
+
+select * from dev.ColumnDetails;
+
+--- or -----
+
+ALTER PROCEDURE [dev].[sp_GetColumnMappingActivity2]
+    @ParameterValueSink NVARCHAR(100)
+AS
+BEGIN
+    DECLARE @json_construct NVARCHAR(MAX) = '{"type": "TabularTranslator", "mappings": [X], "typeConversion":true,"typeConversionSettings":{"allowDataTruncation":true,"treatBooleanAsNumber":false}}';
+    DECLARE @sourceColumns NVARCHAR(MAX);
+    DECLARE @targetColumns NVARCHAR(MAX);
+    DECLARE @sourceColumnTypes NVARCHAR(MAX);
+
+    -- Retrieve the source and target column lists along with their types from v_test
+    SELECT 
+        @sourceColumns = SourceColumnName, 
+        @targetColumns = TargetColumnName,
+        @sourceColumnTypes = sourcecolumntypes
+    FROM v_test
+    WHERE ParameterValueSink = @ParameterValueSink;
+
+    -- Split the source, target column lists, and types into table variables
+    DECLARE @sourceTable TABLE (ColumnName NVARCHAR(100), ColumnType NVARCHAR(100));
+    DECLARE @targetTable TABLE (ColumnName NVARCHAR(100));
+
+    -- Insert source columns and types
+    DECLARE @i INT = 1;
+    DECLARE @sourceColumnsList TABLE (ID INT, ColumnName NVARCHAR(100));
+    DECLARE @sourceTypesList TABLE (ID INT, ColumnType NVARCHAR(100));
+
+    INSERT INTO @sourceColumnsList (ID, ColumnName)
+    SELECT ROW_NUMBER() OVER (ORDER BY (SELECT NULL)), TRIM(value)
+    FROM STRING_SPLIT(REPLACE(REPLACE(@sourceColumns, '[', ''), ']', ''), ',');
+
+    INSERT INTO @sourceTypesList (ID, ColumnType)
+    SELECT ROW_NUMBER() OVER (ORDER BY (SELECT NULL)), TRIM(value)
+    FROM STRING_SPLIT(REPLACE(REPLACE(@sourceColumnTypes, '[', ''), ']', ''), ',');
+
+    INSERT INTO @sourceTable (ColumnName, ColumnType)
+    SELECT c.ColumnName, t.ColumnType
+    FROM @sourceColumnsList c
+    JOIN @sourceTypesList t ON c.ID = t.ID;
+
+    -- Insert target columns
+    INSERT INTO @targetTable (ColumnName)
+    SELECT TRIM(value) FROM STRING_SPLIT(REPLACE(REPLACE(@targetColumns, '[', ''), ']', ''), ',');
+
+    -- Combine the source and target columns into JSON
+    DECLARE @json NVARCHAR(MAX);
+    SET @json = (
+        SELECT 
+            st.ColumnName AS 'source.name',
+            'String' AS 'source.type',
+            'String' AS 'source.physicalType',
+            tt.ColumnName AS 'sink.name',
+            st.ColumnType AS 'sink.type',
+            st.ColumnType AS 'sink.physicalType'
+        FROM @sourceTable st
+        JOIN @targetTable tt ON REPLACE(st.ColumnName, ' ', '') = tt.ColumnName
+        FOR JSON PATH
+    );
+
+    -- Combine the JSON string with the JSON construct
+    SET @json = REPLACE(@json_construct, '[X]', @json);
+
+    -- Return the final JSON output
+    SELECT @json AS json_output;
+END;
+
+=========================
+
+DECLARE @json_construct NVARCHAR(MAX) = '{"type": "TabularTranslator", "mappings": [X], "typeConversion":true,"typeConversionSettings":{"allowDataTruncation":true,"treatBooleanAsNumber":false}}';
+DECLARE @sourceColumns NVARCHAR(MAX);
+DECLARE @targetColumns NVARCHAR(MAX);
+DECLARE @sourceColumnTypes NVARCHAR(MAX);
+
+  -- Retrieve the source and target column lists along with their types from v_test
+SELECT 
+@sourceColumns = SourceColumnName, 
+@targetColumns = TargetColumnName,
+@sourceColumnTypes = sourcecolumntypes
+FROM v_test
+WHERE ParameterValueSink = '2-WheelSales.csv';
+
+--DECLARE @sourceTable TABLE (ColumnName NVARCHAR(max));
+--DECLARE @targetTable TABLE (ColumnName NVARCHAR(max));
+--DECLARE @sourceTypeTable TABLE (ColumnType NVARCHAR(max));
+
+--INSERT INTO @sourceTable (ColumnName)
+--SELECT TRIM(value) FROM STRING_SPLIT(REPLACE(REPLACE(@sourceColumns, '[', ''), ']', ''), ',');
+
+--INSERT INTO @targetTable (ColumnName)
+--SELECT TRIM(value) FROM STRING_SPLIT(REPLACE(REPLACE(@targetColumns, '[', ''), ']', ''), ',');
+
+--INSERT INTO @sourceTypeTable (ColumnType)
+--SELECT TRIM(value) FROM STRING_SPLIT(REPLACE(REPLACE(@sourceColumnTypes, '[', ''), ']', ''), ',');
+
+
+--SELECT * FROM @sourceTable;
+--SELECT * FROM @targetTable;
+--SELECT * FROM @sourceTypeTable;
+
+--DECLARE @json NVARCHAR(MAX);
+--SET @json = (
+--SELECT 
+--    st.ColumnName AS 'source.name',
+--    'String' AS 'source.type',
+--    'String' AS 'source.physicalType',
+--    tt.ColumnName AS 'sink.name',
+--    ct.ColumnType AS 'sink.type',
+--	-- 'String' As 'sink.type',
+--    'String' AS 'sink.physicalType'
+--FROM @sourceTable st
+--JOIN @targetTable tt ON st.ColumnName = tt.ColumnName
+--JOIN @sourceTypeTable ct ON st.ColumnName = ct.ColumnType
+--FOR JSON PATH
+--);
+
+--select @json;
+
+-- Split the source, target column lists, and types into table variables
+DECLARE @sourceTable TABLE (ColumnName NVARCHAR(100), ColumnType NVARCHAR(100));
+DECLARE @targetTable TABLE (ColumnName NVARCHAR(100));
+
+-- Insert source columns and types
+DECLARE @i INT = 1;
+DECLARE @sourceColumnsList TABLE (ID INT, ColumnName NVARCHAR(max));
+DECLARE @sourceTypesList TABLE (ID INT, ColumnType NVARCHAR(max));
+
+INSERT INTO @sourceColumnsList (ID, ColumnName)
+SELECT ROW_NUMBER() OVER (ORDER BY (SELECT NULL)), TRIM(value)
+FROM STRING_SPLIT(REPLACE(REPLACE(@sourceColumns, '[', ''), ']', ''), ',');
+
+INSERT INTO @sourceTypesList (ID, ColumnType)
+SELECT ROW_NUMBER() OVER (ORDER BY (SELECT NULL)), TRIM(value)
+FROM STRING_SPLIT(REPLACE(REPLACE(@sourceColumnTypes, '[', ''), ']', ''), ',');
+
+INSERT INTO @sourceTable (ColumnName, ColumnType)
+SELECT c.ColumnName, t.ColumnType
+FROM @sourceColumnsList c
+JOIN @sourceTypesList t ON c.ID = t.ID;
+
+-- select * from @sourceTable;
+
+  -- Insert target columns
+INSERT INTO @targetTable (ColumnName)
+SELECT TRIM(value) FROM STRING_SPLIT(REPLACE(REPLACE(@targetColumns, '[', ''), ']', ''), ',');
+
+-- Debugging output to verify table contents
+SELECT * FROM @sourceTable;
+SELECT * FROM @targetTable;
+
+-- Combine the source and target columns into JSON
+DECLARE @json NVARCHAR(MAX);
+SET @json = (
+SELECT 
+    st.ColumnName AS 'source.name',
+    'String' AS 'source.type',
+    'String' AS 'source.physicalType',
+    tt.ColumnName AS 'sink.name',
+    st.ColumnType AS 'sink.type',
+    st.ColumnType AS 'sink.physicalType'
+FROM @sourceTable st
+JOIN @targetTable tt ON st.ColumnName = tt.ColumnName
+
+FOR JSON PATH
+);
+
+-- Combine the JSON string with the JSON construct
+SET @json = REPLACE(@json_construct, '[X]', @json);
+
+-- Return the final JSON output
+SELECT @json AS json_output;
+
+
+
+======================================================================
+
+create view v_test as 
+SELECT 
+    p.PipelineName, 
+	p.Pk_PipelineID,
+    e.Pk_ActivityID, 
+    p.sourcetypes AS PipelineSourceTypes,
+    CASE
+        WHEN p.PipelineParameters LIKE '%para_filenamesrc%' THEN JSON_VALUE(p.PipelineParameters, '$.para_filenamesrc')
+        WHEN p.PipelineParameters LIKE '%para_srctable%' THEN JSON_VALUE(p.PipelineParameters, '$.para_srctable')
+    END AS ParameterValueSink,
+    cd.SourceTypes AS ColumnSourceTypes,
+    cd.SourceColumnName,
+    cd.TargetColumnName,
+    -- cd.ColumnTypes,
+	cd.sourcecolumntypes,
+    cd.IsNullable,
+    cd.IsActive
+FROM 
+    dev.pipelines2 p
+JOIN 
+    dev.Entity e ON p.Pk_PipelineID = e.Fk_PipelineID
+JOIN
+    dev.columndetails cd ON e.Pk_ActivityID = cd.Fk_ActivityID
+
+=========================================================================== ======================== ============= 
+
+
+res dataframe ::
+
+	PipelineName	Pk_PipelineID	Pk_ActivityID	PipelineSourceTypes	ParameterValueSink	ColumnSourceTypes		SourceColumnName																														TargetColumnName													sourcecolumntypes																			IsNullable	IsActive	test
+PL_Copy2WheelsData	101			2		CSV		2-WheelSales.csv		CSV		[OEM, Model, Segment, Month, Year, NoOfSales, EngineCapacity, Mileage, Model Price, Dealer location, Region]												[OEM, Model, Segment, Month, Year, NoOfSales, EngineCapacity, Mileage, ModelPrice, Dealerlocation, Region]									[string, string, string, string, int, int, string, string, string, string, string]													0	1		2-WheelSales
+PL_Copy4WheelsData	102			3		CSV		4-WheelSales.csv		CSV		[Brand, Model, Body Type, FUEL TYPE, Mileage, ENGINE, TRANSMISSION, Price range, Fuel Capacity (L), Seating Capacity, Top_Speed in Km/h, No Of Cylinders, Year Of Sale, Month Of Sale , Country, City]	[Brand, Model, BodyType, FUELTYPE, Mileage, ENGINE, TRANSMISSION, Pricerange, FuelCapacity, SeatingCapacity, Top_Speed, NoOfCylinders, YearOfSale, MonthOfSale, Country, City]	[string, string, string, string, string, string, string, string, int, int, string, int, int, string, string, string]												4-WheelSales
+
+
+ type_dict = {
+            'string': StringType(),
+            'int': IntegerType(),
+            'long': LongType(),
+            'float': FloatType(),
+            'double': DoubleType(),
+            'boolean': BooleanType()
+        }
+
+        for row in reference_df.collect():
+            pipeline_name = row['PipelineName']
+            source_columns = row['SourceColumnName']
+            target_columns = row['TargetColumnName']
+            source_types = row['sourcecolumntypes']
+            folder_names = row['test']
+
+            print(f"Processing pipeline: {pipeline_name}")
+            print(f"Source Columns: {source_columns}")
+            print(f"Target Columns: {target_columns}")
+            print(f"Source Types: {source_types}")
+            print(f"Folder Name: {folder_names}")
+
+            # Create a mapping of target column names to their data types
+            type_mapping = {}
+            for col_name, col_type in zip(target_columns, source_types):
+                if col_type not in type_dict:
+                    raise ValueError(f"Unsupported data type: {col_type}")
+                type_mapping[col_name] = type_dict[col_type]
+
+            print(f"Type Mapping: {type_mapping}")
+
+def schema_mappings (filepaths, reference_df):
+    try:
+
+        for row in reference_df.collect():
+            pipeline_name = row['PipelineName']
+            print("sourcecolumnNames")
+            source_columns = row['SourceColumnName']
+            target_columns = row['TargetColumnName']
+            source_types = row['sourcecolumntypes']
+            folder_names = row['test']
+
+            print(pipeline_name)
+            print(target_columns)
+            print(source_types)
+            print(folder_names)
+
+
+            file_info = dbutils.fs.ls(filepaths)
+        #  print(file_info)
+
+            file_paths = [file.path for file in file_info]
+        #  print(file_paths)
+
+        #  paths = [f"'{file.path}'" for file in file_info]
+            dt_string = datetime.now().strftime("year=%Y/Month=%m/day=%d")
+
+            for x in file_paths:
+             
+                print(x)
+                full_path = x+dt_string
+                print(full_path)
+                dfs = spark.read.format('parquet').load(full_path).withColumn('inputfilename', input_file_name()).withColumn('inputfilename', split(col('inputfilename'), '/').getItem(3))
+
+                actual_columns = dfs.columns
+                print(actual_columns)
+
+     
+    except Exception as e:
+        raise e 
+        
+outpt::
+
+sourcecolumnNames
+PL_Copy2WheelsData
+[OEM, Model, Segment, Month, Year, NoOfSales, EngineCapacity, Mileage, ModelPrice, Dealerlocation, Region]
+[string, string, string, string, int, int, string, string, string, string, string]
+2-WheelSales
+dbfs:/mnt/genericSilver/2-WheelSales/
+dbfs:/mnt/genericSilver/2-WheelSales/year=2024/Month=07/day=03
+['Dealerlocation', 'EngineCapacity', 'Mileage', 'Model', 'ModelPrice', 'Month', 'NoOfSales', 'OEM', 'Region', 'Segment', 'Year', 'inputfilename']
+dbfs:/mnt/genericSilver/4-WheelSales/
+dbfs:/mnt/genericSilver/4-WheelSales/year=2024/Month=07/day=03
+['BodyType', 'Brand', 'City', 'Country', 'ENGINE', 'FUELTYPE', 'Mileage', 'Model', 'MonthOfSale', 'NoOfCylinders', 'Pricerange', 'SeatingCapacity', 'TRANSMISSION', 'YearOfSale', 'inputfilename']
+sourcecolumnNames
+PL_Copy4WheelsData
+[Brand, Model, BodyType, FUELTYPE, Mileage, ENGINE, TRANSMISSION, Pricerange, FuelCapacity, SeatingCapacity, Top_Speed, NoOfCylinders, YearOfSale, MonthOfSale, Country, City]
+[string, string, string, string, string, string, string, string, int, int, string, int, int, string, string, string]
+4-WheelSales
+dbfs:/mnt/genericSilver/2-WheelSales/
+dbfs:/mnt/genericSilver/2-WheelSales/year=2024/Month=07/day=03
+['Dealerlocation', 'EngineCapacity', 'Mileage', 'Model', 'ModelPrice', 'Month', 'NoOfSales', 'OEM', 'Region', 'Segment', 'Year', 'inputfilename']
+dbfs:/mnt/genericSilver/4-WheelSales/
+dbfs:/mnt/genericSilver/4-WheelSales/year=2024/Month=07/day=03
+['BodyType', 'Brand', 'City', 'Country', 'ENGINE', 'FUELTYPE', 'Mileage', 'Model', 'MonthOfSale', 'NoOfCylinders', 'Pricerange', 'SeatingCapacity', 'TRANSMISSION', 'YearOfSale', 'inputfilename']
+
+I need to map the schema types .. means for my dfs  i have all stringType datatypes , according to the test column values i need to pick up sourceTypes and TargetColumnNames and attach that datatype to the column
+
+
+  # Convert the `source_types` from a string representation of a list to a Python list
+            if isinstance(source_types, str):
+                source_types = source_types.strip("[]").replace("'", "").split(", ")
+            elif not isinstance(source_types, list):
+                raise ValueError("`sourcecolumntypes` must be a string representation of a list or a list.")
+
+            # Check if the length of target_columns and source_types match
+            if len(target_columns) != len(source_types):
+                raise ValueError(f"Mismatch between target columns and source types lengths for {pipeline_name}")
+
+            # Create a mapping of target column names to their data types
+            type_mapping = {}
+            for col_name, col_type in zip(target_columns, source_types):
+                # Ensure the type is a valid data type string
+                col_type = col_type.strip()
+                if col_type not in type_dict:
+                    raise ValueError(f"Unsupported data type: {col_type}")
+                type_mapping[col_name] = type_dict[col_type]
+
+            print(f"Type Mapping: {type_mapping}")
+
+
+
+actual_columns = dfs.columns
+                print(f"Actual Columns: {actual_columns}")
+
+                # Create a new schema based on type_mapping
+                for col_name, col_type in type_mapping.items():
+                    if col_name in actual_columns:
+                        dfs = dfs.withColumn(col_name, col(col_name).cast(col_type))
+                    else:
+                        raise ValueError(f"Column '{col_name}' from target columns does not exist in the DataFrame")
+
+                # Print the updated schema
+                dfs.printSchema()
+
+
+
+Code ::
+
+def schema_mappings (filepaths, reference_df):
+    try:
+        type_dict = {
+            'string' : StringType(),
+            'int' : IntegerType(),
+            'long' : LongType(),
+            'float' : FloatType(),
+            'double' : DoubleType(),
+            'boolean' : BooleanType(),
+            'date' : DateType()
+        }
+
+        for row in reference_df.collect():
+
+            pipeline_name = row['PipelineName']
+            print("sourcecolumnNames")
+            source_columns = row['SourceColumnName']
+            target_columns = row['TargetColumnName']
+            target_columns = target_columns.strip("[]").split(",")
+            print(len(target_columns))
+            target_columns = [col_name.strip() for col_name in target_columns]
+            source_types = row['sourcecolumntypes']
+            folder_names = row['test']
+
+            print(pipeline_name)
+            print(f"target_columns are {target_columns}")
+            print(source_types)
+            print(folder_names)
+
+            # print(source_types.strip("[]").replace("'","").split(", "))
+            source_types = source_types.strip("[]").split(",")
+            print(len(source_types))
+
+            if len(target_columns) != len(source_types):
+                raise ValueError(f"Mismatch between target columns and source types lengths for {pipeline_name}")
+
+            type_mapping = {}
+
+            for col_name, col_type in zip(target_columns, source_types):
+                col_type = col_type.strip()
+                print(col_type)
+                if col_type not in type_dict:
+                    raise ValueError (f"Unsupported data type : {col_type}")
+
+                type_mapping[col_name] = type_dict[col_type]
+
+            print(f"Type Mapping : {type_mapping}")
+
+            file_info = dbutils.fs.ls(filepaths)
+
+
+            file_paths = [file.path for file in file_info]
+
+            dt_string = datetime.now().strftime("year=%Y/Month=%m/day=%d")
+
+            for x in file_paths:
+                print(x)
+                full_path = x+dt_string
+                print(full_path)
+
+                dfs = spark.read.format('parquet').load(full_path)
+
+                actual_columns = dfs.columns
+
+                print(f"Actual Columns : {actual_columns}")
+
+                for col_name, col_type in type_mapping.items():
+                    if col_name in actual_columns :
+                        print(col_name)
+                    else:
+                        raise ValueError (f"Column '{col_name}' from target columns does not exist in the DataFrame")
+
+
+     
+    except Exception as e:
+        raise e 
+        
+Ouptut : 
+
+
+Processing pipeline: PL_Copy2WheelsData
+Source Columns: [OEM, Model, Segment, Month, Year, NoOfSales, EngineCapacity, Mileage, Model Price, Dealer location, Region]
+Target Columns: ['OEM', 'Model', 'Segment', 'Month', 'Year', 'NoOfSales', 'EngineCapacity', 'Mileage', 'ModelPrice', 'Dealerlocation', 'Region']
+Source Types: [string, string, string, string, int, int, string, string, string, string, string]
+Folder Name: 2-WheelSales
+Type Mapping: {'OEM': StringType(), 'Model': StringType(), 'Segment': StringType(), 'Month': StringType(), 'Year': IntegerType(), 'NoOfSales': IntegerType(), 'EngineCapacity': StringType(), 'Mileage': StringType(), 'ModelPrice': StringType(), 'Dealerlocation': StringType(), 'Region': StringType()}
+
+Processing file: dbfs:/mnt/genericSilver/2-WheelSales/
+Full Path: dbfs:/mnt/genericSilver/2-WheelSales/year=2024/Month=07/day=03
+Actual Columns: ['Dealerlocation', 'EngineCapacity', 'Mileage', 'Model', 'ModelPrice', 'Month', 'NoOfSales', 'OEM', 'Region', 'Segment', 'Year']
+OEM
+Model
+Segment
+Month
+Year
+NoOfSales
+EngineCapacity
+Mileage
+ModelPrice
+Dealerlocation
+Region
+root
+ |-- Dealerlocation: string (nullable = true)
+ |-- EngineCapacity: string (nullable = true)
+ |-- Mileage: string (nullable = true)
+ |-- Model: string (nullable = true)
+ |-- ModelPrice: string (nullable = true)
+ |-- Month: string (nullable = true)
+ |-- NoOfSales: integer (nullable = true)
+ |-- OEM: string (nullable = true)
+ |-- Region: string (nullable = true)
+ |-- Segment: string (nullable = true)
+ |-- Year: integer (nullable = true)
+
+
+Processing file: dbfs:/mnt/genericSilver/4-WheelSales/
+Full Path: dbfs:/mnt/genericSilver/4-WheelSales/year=2024/Month=07/day=03
+Actual Columns: ['BodyType', 'Brand', 'City', 'Country', 'ENGINE', 'FUELTYPE', 'Mileage', 'Model', 'MonthOfSale', 'NoOfCylinders', 'Pricerange', 'SeatingCapacity', 'TRANSMISSION', 'YearOfSale']
+
+
+Actual Columns : ['BodyType', 'Brand', 'City', 'Country', 'ENGINE', 'FUELTYPE', 'Mileage', 'Model', 'MonthOfSale', 'NoOfCylinders', 'Pricerange', 'SeatingCapacity', 'TRANSMISSION', 'YearOfSale']
+ValueError: Column 'OEM' from target columns does not exist in the DataFrame
+File <command-2178238408620504>, line 1
+----> 1 schema_mappings(filepaths='/mnt/genericSilver/', reference_df= res)
+
+i abosrved one thing here dfs is creating perfectly for the file_paths, but for loop on control_df is not iterating again. it's stuck at 2_wheelsSales only
+
