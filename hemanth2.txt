@@ -1,0 +1,506 @@
+
+Find the Lowest Price range for each Model in a Brand::::
+
++-----------------------+-------------+-----------------------+
+|Pricerange             |Brand        |Model                  |
++-----------------------+-------------+-----------------------+
+|40.01 Lakh             |MINI Cooper  |Cooper Convertible     |
+|7.95 - 12.55 Lakh      |Mahindra     |XUV300                 |
+|4.02 Crore             |Ferrari      |F8 Tributo             |
+|5.92 - 9.32 Lakh       |Hyundai      |Aura                   |
+|85.46 Lakh - 1.64 Crore|Porsche      |718                    |
+|6.24 - 9.99 Lakh       |Honda        |Amaze                  |
+|51.5 - 53.9 Lakh       |BMW          |3 Series Gran Limousine|
+|5.5 - 7.64 Lakh        |Tata         |Tigor                  |
+|5.87 - 7.45 Lakh       |Mahindra     |KUV100 NXT             |
+|11.02 - 14.95 Lakh     |Honda        |All New City           |
+|6.17 - 10 Lakh         |Volkswagen   |Polo                   |
+|10.51 - 10.83 Lakh     |Tata         |Tigor EV               |
+|66.07 Lakh             |Jaguar       |F-Pace                 |
+|8.7 - 11.11 Lakh       |Honda        |WR-V                   |
+|9.3 - 10 Lakh          |Honda        |City                   |
+|29.9 - 31.9 Lakh       |Citroen      |C5 Aircross            |
+|1.2 - 1.93 Crore       |Porsche      |Cayenne                |
+|1.55 Crore             |BMW          |M5                     |
+|10 - 17.54 Lakh        |Hyundai      |Creta                  |
+|1.27 Crore             |Mercedes Benz|AMG GLE Coupe          |
+|56 - 69.1 Lakh         |BMW          |5 Series               |
+|42.6 - 62.9 Lakh       |BMW          |3 Series               |
+|6.8 - 11.33 Lakh       |Hyundai      |i20                    |
+|10 - 14.15 Lakh        |Mahindra     |Thar                   |
+|1.15 - 1.92 Crore      |Maserati     |Ghibli                 |
+|39.5 - 43.4 Lakh       |MINI Cooper  |Countryman             |
+|55.86 - 60.51 Lakh     |Audi         |A6                     |
+|45.9 Lakh              |Volvo        |S60                    |
+|4.67 - 6.35 Lakh       |Hyundai      |Santro                 |
+|13.63 - 19.81 Lakh     |MG           |Hector Plus            |
+|1.58 Crore             |Audi         |A8 L                   |
+|95.12 Lakh - 2.54 Crore|Jaguar       |F TYPE                 |
+|9.16 - 14.6 Lakh       |Toyota       |Yaris                  |
+|2.42 Crore             |Mercedes Benz|AMG GT 4-Door Coupe    |
+|8.12 - 9.1 Lakh        |Mahindra     |Bolero                 |
+|62.4 - 68.9 Lakh       |BMW          |X4                     |
+|63.6 - 80.9 Lakh       |Mercedes Benz|E Class                |
+|2.33 Crore             |Lexus        |LX                     |
+|56.55 - 61.75 Lakh     |Lexus        |ES                     |
+|1.04 Crore             |Lexus        |RX                     |
+|9.14 - 13.83 Lakh      |Volkswagen   |Vento                  |
+|1.94 Crore             |Audi         |RS7 Sportback          |
+|5.92 Crore             |Rolls Royce  |Dawn                   |
+|69.98 - 85.01 Lakh     |Porsche      |Macan                  |
+|37.2 - 42.9 Lakh       |BMW          |X1                     |
+|59 Lakh                |Volvo        |S90                    |
+|80.99 Lakh - 1.31 Crore|Volvo        |XC90                   |
+|1.95 Crore             |BMW          |X5 M                   |
+|8.5 - 11.35 Lakh       |Toyota       |Urban Cruiser          |
+|11.64 - 13.8 Lakh      |Mahindra     |Marazzo                |
+|7.18 - 9.1 Lakh        |Toyota       |Glanza                 |
+|21 - 24.18 Lakh        |MG           |ZS EV                  |
+|30.34 - 38.3 Lakh      |Toyota       |Fortuner               |
+|49.41 - 65.55 Lakh     |Mercedes Benz|C Class                |
+|1.91 - 2.22 Crore      |Lexus        |LS                     |
+|22.55 - 27.33 Lakh     |Hyundai      |Tucson                 |
+|1.64 - 3.08 Crore      |Porsche      |911                    |
+|21.35 Lakh             |Volkswagen   |T-Roc                  |
+|11.98 - 16.44 Lakh     |Mahindra     |Scorpio                |
+|37.9 - 42.3 Lakh       |BMW          |2 Series Gran Coupe    |
+|58.2 - 63.63 Lakh      |Lexus        |NX                     |
+|13.18 - 19.06 Lakh     |MG           |Hector                 |
+|77.25 Lakh             |Mercedes Benz|E-Class All-Terrain    |
+|1.05 Crore             |Mercedes Benz|GLS                    |
+|6.79 - 13.19 Lakh      |Kia          |Sonet                  |
+|34.99 - 48.89 Lakh     |Audi         |Q2                     |
+|9.11 - 15.2 Lakh       |Hyundai      |Verna                  |
+|1.04 Crore             |Mercedes Benz|EQC                    |
+|35.06 - 43.9 Lakh      |MINI Cooper  |S                      |
+|14.69 - 21.45 Lakh     |Tata         |Safari                 |
+|41.9 Lakh              |MINI Cooper  |Clubman                |
+|98.98 Lakh - 1.35 Crore|Audi         |Q8                     |
+|1.62 - 2.42 Crore      |Mercedes Benz|G Class                |
+|46.64 - 48.5 Lakh      |Jaguar       |XE                     |
+|5 Crore                |Rolls Royce  |Wraith                 |
+|1.38 - 2.46 Crore      |BMW          |7 Series               |
+|42.34 - 46.67 Lakh     |Audi         |A4                     |
+|1.64 - 1.73 Crore      |Maserati     |Quattroporte           |
+|9.89 - 17.65 Lakh      |Kia          |Seltos                 |
+|4.86 - 6.85 Lakh       |Tata         |Tiago                  |
+|39.9 - 56.24 Lakh      |Mercedes Benz|A-Class Limousine      |
+|9.5 - 14.65 Lakh       |Nissan       |Kicks                  |
+|9.73 - 14.12 Lakh      |Renault      |Duster                 |
+|56.5 - 62.5 Lakh       |BMW          |X3                     |
+|5.2 Crore              |Ferrari      |812                    |
+|87 Lakh                |Toyota       |Vellfire               |
+|6.87 - 11.67 Lakh      |Hyundai      |Venue                  |
+|5.7 - 9.46 Lakh        |Tata         |Altroz                 |
+|16.52 - 24.43 Lakh     |Toyota       |Innova Crysta          |
+|3.22 - 4.1 Crore       |Lamborghini  |Huracan                |
+|5.19 - 8.41 Lakh       |Hyundai      |Grand i10 Nios         |
+|3.5 Crore              |Ferrari      |Portofino              |
+|99.9 Lakh              |BMW          |X3 M                   |
+|85 Lakh                |BMW          |M2                     |
+|1.42 - 2.79 Crore      |Mercedes Benz|S Class                |
+|66.66 - 67.72 Lakh     |Mercedes Benz|GLC Coupe              |
+|1.44 - 2.43 Crore      |Porsche      |Panamera               |
+|57.36 - 63.13 Lakh     |Mercedes Benz|GLC Class              |
+|96.9 Lakh              |BMW          |X6                     |
+|9.5 Crore              |Rolls Royce  |Phantom VIII           |
+|2.68 Crore             |Maserati     |GranCabrio             |
+|17.83 - 21.1 Lakh      |Hyundai      |Elantra                |
+|5.45 - 9.72 Lakh       |Renault      |Kiger                  |
+|1.45 Crore             |Maserati     |Levante                |
+|79.06 Lakh             |Audi         |S5 Sportback           |
+|24.15 - 24.34 Lakh     |Hyundai      |Kona Electric          |
+|71.1 Lakh - 1.46 Crore |Mercedes Benz|V-Class                |
+|6.95 Crore             |Rolls Royce  |Cullinan               |
+|24.95 - 33.95 Lakh     |Kia          |Carnival               |
+|14 - 20.46 Lakh        |Tata         |Harrier                |
+|75.5 - 87.4 Lakh       |BMW          |X5                     |
+|4.03 - 6.51 Lakh       |Datsun       |Go                     |
+|1.06 - 1.12 Crore      |Jaguar       |I-Pace                 |
+|7.1 - 12.8 Lakh        |Tata         |Nexon                  |
+|13.8 - 19.46 Lakh      |Mahindra     |XUV500                 |
+|13.99 - 16.4 Lakh      |Tata         |Nexon EV               |
+|2.12 Crore             |Nissan       |GT-R                   |
+|1.33 - 1.58 Crore      |BMW          |8 Series               |
+|34.2 Lakh              |Volkswagen   |Tiguan AllSpace        |
+|4.1 Crore              |Bentley      |Bentayga               |
+|65.41 Lakh             |Volvo        |V90 Cross Country      |
+|3.84 - 4.96 Lakh       |Datsun       |redi-GO                |
+|39.9 Lakh              |Volvo        |XC40                   |
+|4.26 - 7 Lakh          |Datsun       |GO Plus                |
+|4.23 - 5.09 Crore      |Ferrari      |GTC4 Lusso             |
+|3.18 - 8.55 Lakh       |Renault      |Kwid                   |
+|67 - 81.9 Lakh         |BMW          |Z4                     |
+|2.07 Crore             |Audi         |RS Q8                  |
+|55.67 Lakh             |Jaguar       |XF                     |
+|2.18 Crore             |BMW          |M8                     |
+|2.25 Crore             |Maserati     |GranTurismo            |
+|93 Lakh - 1.66 Crore   |BMW          |X7                     |
+|2.48 Crore             |Mercedes Benz|AMG GT                 |
+|5.59 - 9.9 Lakh        |Nissan       |Magnite                |
+|40.59 Lakh             |Toyota       |Camry                  |
+|5.29 - 7.82 Lakh       |Renault      |Triber                 |
+|67.9 - 77.9 Lakh       |BMW          |6 Series GT            |
+|16.99 - 28.29 Lakh     |Jeep         |Compass                |
+|1.32 - 1.98 Crore      |Porsche      |Cayenne Coupe          |
+|28.73 - 31.73 Lakh     |Mahindra     |Alturas G4             |
+|29.98 - 36.08 Lakh     |MG           |Gloster                |
+|3.1 Crore              |Lamborghini  |Urus                   |
+|2.1 - 2.16 Crore       |Lexus        |LC 500h                |
+|79.93 Lakh - 1.39 Crore|Mercedes Benz|C Coupe                |
+|59.9 Lakh              |Volvo        |XC60                   |
+|7.63 - 9.87 Lakh       |Honda        |Jazz                   |
+|81.22 Lakh             |Mercedes Benz|AMG GLC 43 Coupe       |
+|77.25 - 94.22 Lakh     |Mercedes Benz|GLE                    |
+|86.39 Lakh             |Mercedes Benz|CLS                    |
+|53.9 - 57.9 Lakh       |Jeep         |Wrangler               |
++-----------------------+-------------+-----------------------+
+
+df_max_min = df4.withColumn('Low', when(col('Pricerange').contains('-') , split(col('Pricerange'), '-')[0] ).otherwise(col('Pricerange')))\
+            .withColumn('High',  when(col('Pricerange').contains('-'), split(col('Pricerange'), '-')[1]).otherwise(col('Pricerange')) )
+
+
+
+
+def convert_to_lakhs(price):
+    """
+    assumes values contains "Lakh" are already in Lakhs
+    crores converted to Lakhs
+    1 cr = 100 Lakhs
+
+    """
+    if "Crore" in price:
+        return float(price.replace(" Crore", "")) *100
+    elif "Lakh" in price:
+        return float(price.replace(" Lakh", ""))
+    else:
+        return float(price)
+    
+
+convert_to_lakhs_udf = spark.udf.register("convert_to_lakhs", convert_to_lakhs)
+
+# df = df_max_min.withColumn("Low2", when(col("Low").rlike("Crore|Lakh"), convert_to_lakhs_udf(col("Low"))).otherwise(col("Low"))) \
+#     .withColumn("Low2", trim(col("Low2"))).show()
+
+df = df_max_min.withColumn("Low2",   convert_to_lakhs_udf(col('Low')))\
+    .withColumn("High2", convert_to_lakhs_udf(col('High')))
+
+df.show(200, truncate=False)
+
+df_f = df.groupBy('Brand', 'Model').agg(min(col('Low2')).alias('LowestPrice_in_lakhs'))
+
+df_f.show(200, truncate=False)
+
++-----------------------+-------------+-----------------------+-----------+-----------+------------------+------------------+
+|Pricerange             |Brand        |Model                  |Low        |High       |Low2              |High2             |
++-----------------------+-------------+-----------------------+-----------+-----------+------------------+------------------+
+|40.01 Lakh             |MINI Cooper  |Cooper Convertible     |40.01 Lakh |40.01 Lakh |40.01             |40.01             |
+|7.95 - 12.55 Lakh      |Mahindra     |XUV300                 |7.95       | 12.55 Lakh|7.95              |12.55             |
+|4.02 Crore             |Ferrari      |F8 Tributo             |4.02 Crore |4.02 Crore |401.99999999999994|401.99999999999994|
+|5.92 - 9.32 Lakh       |Hyundai      |Aura                   |5.92       | 9.32 Lakh |5.92              |9.32              |
+|85.46 Lakh - 1.64 Crore|Porsche      |718                    |85.46 Lakh | 1.64 Crore|85.46             |164.0             |
+|6.24 - 9.99 Lakh       |Honda        |Amaze                  |6.24       | 9.99 Lakh |6.24              |9.99              |
+|51.5 - 53.9 Lakh       |BMW          |3 Series Gran Limousine|51.5       | 53.9 Lakh |51.5              |53.9              |
+|5.5 - 7.64 Lakh        |Tata         |Tigor                  |5.5        | 7.64 Lakh |5.5               |7.64              |
+|5.87 - 7.45 Lakh       |Mahindra     |KUV100 NXT             |5.87       | 7.45 Lakh |5.87              |7.45              |
+|11.02 - 14.95 Lakh     |Honda        |All New City           |11.02      | 14.95 Lakh|11.02             |14.95             |
+|6.17 - 10 Lakh         |Volkswagen   |Polo                   |6.17       | 10 Lakh   |6.17              |10.0              |
+|10.51 - 10.83 Lakh     |Tata         |Tigor EV               |10.51      | 10.83 Lakh|10.51             |10.83             |
+|66.07 Lakh             |Jaguar       |F-Pace                 |66.07 Lakh |66.07 Lakh |66.07             |66.07             |
+|8.7 - 11.11 Lakh       |Honda        |WR-V                   |8.7        | 11.11 Lakh|8.7               |11.11             |
+|9.3 - 10 Lakh          |Honda        |City                   |9.3        | 10 Lakh   |9.3               |10.0              |
+|29.9 - 31.9 Lakh       |Citroen      |C5 Aircross            |29.9       | 31.9 Lakh |29.9              |31.9              |
+|1.2 - 1.93 Crore       |Porsche      |Cayenne                |1.2        | 1.93 Crore|1.2               |193.0             |
+|1.55 Crore             |BMW          |M5                     |1.55 Crore |1.55 Crore |155.0             |155.0             |
+|10 - 17.54 Lakh        |Hyundai      |Creta                  |10         | 17.54 Lakh|10.0              |17.54             |
+|1.27 Crore             |Mercedes Benz|AMG GLE Coupe          |1.27 Crore |1.27 Crore |127.0             |127.0             |
+|56 - 69.1 Lakh         |BMW          |5 Series               |56         | 69.1 Lakh |56.0              |69.1              |
+|42.6 - 62.9 Lakh       |BMW          |3 Series               |42.6       | 62.9 Lakh |42.6              |62.9              |
+|6.8 - 11.33 Lakh       |Hyundai      |i20                    |6.8        | 11.33 Lakh|6.8               |11.33             |
+|10 - 14.15 Lakh        |Mahindra     |Thar                   |10         | 14.15 Lakh|10.0              |14.15             |
+|1.15 - 1.92 Crore      |Maserati     |Ghibli                 |1.15       | 1.92 Crore|1.15              |192.0             |
+|39.5 - 43.4 Lakh       |MINI Cooper  |Countryman             |39.5       | 43.4 Lakh |39.5              |43.4              |
+|55.86 - 60.51 Lakh     |Audi         |A6                     |55.86      | 60.51 Lakh|55.86             |60.51             |
+|45.9 Lakh              |Volvo        |S60                    |45.9 Lakh  |45.9 Lakh  |45.9              |45.9              |
+|4.67 - 6.35 Lakh       |Hyundai      |Santro                 |4.67       | 6.35 Lakh |4.67              |6.35              |
+|13.63 - 19.81 Lakh     |MG           |Hector Plus            |13.63      | 19.81 Lakh|13.63             |19.81             |
+|1.58 Crore             |Audi         |A8 L                   |1.58 Crore |1.58 Crore |158.0             |158.0             |
+|95.12 Lakh - 2.54 Crore|Jaguar       |F TYPE                 |95.12 Lakh | 2.54 Crore|95.12             |254.0             |
+|9.16 - 14.6 Lakh       |Toyota       |Yaris                  |9.16       | 14.6 Lakh |9.16              |14.6              |
+|2.42 Crore             |Mercedes Benz|AMG GT 4-Door Coupe    |2.42 Crore |2.42 Crore |242.0             |242.0             |
+|8.12 - 9.1 Lakh        |Mahindra     |Bolero                 |8.12       | 9.1 Lakh  |8.12              |9.1               |
+|62.4 - 68.9 Lakh       |BMW          |X4                     |62.4       | 68.9 Lakh |62.4              |68.9              |
+|63.6 - 80.9 Lakh       |Mercedes Benz|E Class                |63.6       | 80.9 Lakh |63.6              |80.9              |
+|2.33 Crore             |Lexus        |LX                     |2.33 Crore |2.33 Crore |233.0             |233.0             |
+|56.55 - 61.75 Lakh     |Lexus        |ES                     |56.55      | 61.75 Lakh|56.55             |61.75             |
+|1.04 Crore             |Lexus        |RX                     |1.04 Crore |1.04 Crore |104.0             |104.0             |
+|9.14 - 13.83 Lakh      |Volkswagen   |Vento                  |9.14       | 13.83 Lakh|9.14              |13.83             |
+|1.94 Crore             |Audi         |RS7 Sportback          |1.94 Crore |1.94 Crore |194.0             |194.0             |
+|5.92 Crore             |Rolls Royce  |Dawn                   |5.92 Crore |5.92 Crore |592.0             |592.0             |
+|69.98 - 85.01 Lakh     |Porsche      |Macan                  |69.98      | 85.01 Lakh|69.98             |85.01             |
+|37.2 - 42.9 Lakh       |BMW          |X1                     |37.2       | 42.9 Lakh |37.2              |42.9              |
+|59 Lakh                |Volvo        |S90                    |59 Lakh    |59 Lakh    |59.0              |59.0              |
+|80.99 Lakh - 1.31 Crore|Volvo        |XC90                   |80.99 Lakh | 1.31 Crore|80.99             |131.0             |
+|1.95 Crore             |BMW          |X5 M                   |1.95 Crore |1.95 Crore |195.0             |195.0             |
+|8.5 - 11.35 Lakh       |Toyota       |Urban Cruiser          |8.5        | 11.35 Lakh|8.5               |11.35             |
+|11.64 - 13.8 Lakh      |Mahindra     |Marazzo                |11.64      | 13.8 Lakh |11.64             |13.8              |
+|7.18 - 9.1 Lakh        |Toyota       |Glanza                 |7.18       | 9.1 Lakh  |7.18              |9.1               |
+|21 - 24.18 Lakh        |MG           |ZS EV                  |21         | 24.18 Lakh|21.0              |24.18             |
+|30.34 - 38.3 Lakh      |Toyota       |Fortuner               |30.34      | 38.3 Lakh |30.34             |38.3              |
+|49.41 - 65.55 Lakh     |Mercedes Benz|C Class                |49.41      | 65.55 Lakh|49.41             |65.55             |
+|1.91 - 2.22 Crore      |Lexus        |LS                     |1.91       | 2.22 Crore|1.91              |222.00000000000003|
+|22.55 - 27.33 Lakh     |Hyundai      |Tucson                 |22.55      | 27.33 Lakh|22.55             |27.33             |
+|1.64 - 3.08 Crore      |Porsche      |911                    |1.64       | 3.08 Crore|1.64              |308.0             |
+|21.35 Lakh             |Volkswagen   |T-Roc                  |21.35 Lakh |21.35 Lakh |21.35             |21.35             |
+|11.98 - 16.44 Lakh     |Mahindra     |Scorpio                |11.98      | 16.44 Lakh|11.98             |16.44             |
+|37.9 - 42.3 Lakh       |BMW          |2 Series Gran Coupe    |37.9       | 42.3 Lakh |37.9              |42.3              |
+|58.2 - 63.63 Lakh      |Lexus        |NX                     |58.2       | 63.63 Lakh|58.2              |63.63             |
+|13.18 - 19.06 Lakh     |MG           |Hector                 |13.18      | 19.06 Lakh|13.18             |19.06             |
+|77.25 Lakh             |Mercedes Benz|E-Class All-Terrain    |77.25 Lakh |77.25 Lakh |77.25             |77.25             |
+|1.05 Crore             |Mercedes Benz|GLS                    |1.05 Crore |1.05 Crore |105.0             |105.0             |
+|6.79 - 13.19 Lakh      |Kia          |Sonet                  |6.79       | 13.19 Lakh|6.79              |13.19             |
+|34.99 - 48.89 Lakh     |Audi         |Q2                     |34.99      | 48.89 Lakh|34.99             |48.89             |
+|9.11 - 15.2 Lakh       |Hyundai      |Verna                  |9.11       | 15.2 Lakh |9.11              |15.2              |
+|1.04 Crore             |Mercedes Benz|EQC                    |1.04 Crore |1.04 Crore |104.0             |104.0             |
+|35.06 - 43.9 Lakh      |MINI Cooper  |S                      |35.06      | 43.9 Lakh |35.06             |43.9              |
+|14.69 - 21.45 Lakh     |Tata         |Safari                 |14.69      | 21.45 Lakh|14.69             |21.45             |
+|41.9 Lakh              |MINI Cooper  |Clubman                |41.9 Lakh  |41.9 Lakh  |41.9              |41.9              |
+|98.98 Lakh - 1.35 Crore|Audi         |Q8                     |98.98 Lakh | 1.35 Crore|98.98             |135.0             |
+|1.62 - 2.42 Crore      |Mercedes Benz|G Class                |1.62       | 2.42 Crore|1.62              |242.0             |
+|46.64 - 48.5 Lakh      |Jaguar       |XE                     |46.64      | 48.5 Lakh |46.64             |48.5              |
+|5 Crore                |Rolls Royce  |Wraith                 |5 Crore    |5 Crore    |500.0             |500.0             |
+|1.38 - 2.46 Crore      |BMW          |7 Series               |1.38       | 2.46 Crore|1.38              |246.0             |
+|42.34 - 46.67 Lakh     |Audi         |A4                     |42.34      | 46.67 Lakh|42.34             |46.67             |
+|1.64 - 1.73 Crore      |Maserati     |Quattroporte           |1.64       | 1.73 Crore|1.64              |173.0             |
+|9.89 - 17.65 Lakh      |Kia          |Seltos                 |9.89       | 17.65 Lakh|9.89              |17.65             |
+|4.86 - 6.85 Lakh       |Tata         |Tiago                  |4.86       | 6.85 Lakh |4.86              |6.85              |
+|39.9 - 56.24 Lakh      |Mercedes Benz|A-Class Limousine      |39.9       | 56.24 Lakh|39.9              |56.24             |
+|9.5 - 14.65 Lakh       |Nissan       |Kicks                  |9.5        | 14.65 Lakh|9.5               |14.65             |
+|9.73 - 14.12 Lakh      |Renault      |Duster                 |9.73       | 14.12 Lakh|9.73              |14.12             |
+|56.5 - 62.5 Lakh       |BMW          |X3                     |56.5       | 62.5 Lakh |56.5              |62.5              |
+|5.2 Crore              |Ferrari      |812                    |5.2 Crore  |5.2 Crore  |520.0             |520.0             |
+|87 Lakh                |Toyota       |Vellfire               |87 Lakh    |87 Lakh    |87.0              |87.0              |
+|6.87 - 11.67 Lakh      |Hyundai      |Venue                  |6.87       | 11.67 Lakh|6.87              |11.67             |
+|5.7 - 9.46 Lakh        |Tata         |Altroz                 |5.7        | 9.46 Lakh |5.7               |9.46              |
+|16.52 - 24.43 Lakh     |Toyota       |Innova Crysta          |16.52      | 24.43 Lakh|16.52             |24.43             |
+|3.22 - 4.1 Crore       |Lamborghini  |Huracan                |3.22       | 4.1 Crore |3.22              |409.99999999999994|
+|5.19 - 8.41 Lakh       |Hyundai      |Grand i10 Nios         |5.19       | 8.41 Lakh |5.19              |8.41              |
+|3.5 Crore              |Ferrari      |Portofino              |3.5 Crore  |3.5 Crore  |350.0             |350.0             |
+|99.9 Lakh              |BMW          |X3 M                   |99.9 Lakh  |99.9 Lakh  |99.9              |99.9              |
+|85 Lakh                |BMW          |M2                     |85 Lakh    |85 Lakh    |85.0              |85.0              |
+|1.42 - 2.79 Crore      |Mercedes Benz|S Class                |1.42       | 2.79 Crore|1.42              |279.0             |
+|66.66 - 67.72 Lakh     |Mercedes Benz|GLC Coupe              |66.66      | 67.72 Lakh|66.66             |67.72             |
+|1.44 - 2.43 Crore      |Porsche      |Panamera               |1.44       | 2.43 Crore|1.44              |243.00000000000003|
+|57.36 - 63.13 Lakh     |Mercedes Benz|GLC Class              |57.36      | 63.13 Lakh|57.36             |63.13             |
+|96.9 Lakh              |BMW          |X6                     |96.9 Lakh  |96.9 Lakh  |96.9              |96.9              |
+|9.5 Crore              |Rolls Royce  |Phantom VIII           |9.5 Crore  |9.5 Crore  |950.0             |950.0             |
+|2.68 Crore             |Maserati     |GranCabrio             |2.68 Crore |2.68 Crore |268.0             |268.0             |
+|17.83 - 21.1 Lakh      |Hyundai      |Elantra                |17.83      | 21.1 Lakh |17.83             |21.1              |
+|5.45 - 9.72 Lakh       |Renault      |Kiger                  |5.45       | 9.72 Lakh |5.45              |9.72              |
+|1.45 Crore             |Maserati     |Levante                |1.45 Crore |1.45 Crore |145.0             |145.0             |
+|79.06 Lakh             |Audi         |S5 Sportback           |79.06 Lakh |79.06 Lakh |79.06             |79.06             |
+|24.15 - 24.34 Lakh     |Hyundai      |Kona Electric          |24.15      | 24.34 Lakh|24.15             |24.34             |
+|71.1 Lakh - 1.46 Crore |Mercedes Benz|V-Class                |71.1 Lakh  | 1.46 Crore|71.1              |146.0             |
+|6.95 Crore             |Rolls Royce  |Cullinan               |6.95 Crore |6.95 Crore |695.0             |695.0             |
+|24.95 - 33.95 Lakh     |Kia          |Carnival               |24.95      | 33.95 Lakh|24.95             |33.95             |
+|14 - 20.46 Lakh        |Tata         |Harrier                |14         | 20.46 Lakh|14.0              |20.46             |
+|75.5 - 87.4 Lakh       |BMW          |X5                     |75.5       | 87.4 Lakh |75.5              |87.4              |
+|4.03 - 6.51 Lakh       |Datsun       |Go                     |4.03       | 6.51 Lakh |4.03              |6.51              |
+|1.06 - 1.12 Crore      |Jaguar       |I-Pace                 |1.06       | 1.12 Crore|1.06              |112.00000000000001|
+|7.1 - 12.8 Lakh        |Tata         |Nexon                  |7.1        | 12.8 Lakh |7.1               |12.8              |
+|13.8 - 19.46 Lakh      |Mahindra     |XUV500                 |13.8       | 19.46 Lakh|13.8              |19.46             |
+|13.99 - 16.4 Lakh      |Tata         |Nexon EV               |13.99      | 16.4 Lakh |13.99             |16.4              |
+|2.12 Crore             |Nissan       |GT-R                   |2.12 Crore |2.12 Crore |212.0             |212.0             |
+|1.33 - 1.58 Crore      |BMW          |8 Series               |1.33       | 1.58 Crore|1.33              |158.0             |
+|34.2 Lakh              |Volkswagen   |Tiguan AllSpace        |34.2 Lakh  |34.2 Lakh  |34.2              |34.2              |
+|4.1 Crore              |Bentley      |Bentayga               |4.1 Crore  |4.1 Crore  |409.99999999999994|409.99999999999994|
+|65.41 Lakh             |Volvo        |V90 Cross Country      |65.41 Lakh |65.41 Lakh |65.41             |65.41             |
+|3.84 - 4.96 Lakh       |Datsun       |redi-GO                |3.84       | 4.96 Lakh |3.84              |4.96              |
+|39.9 Lakh              |Volvo        |XC40                   |39.9 Lakh  |39.9 Lakh  |39.9              |39.9              |
+|4.26 - 7 Lakh          |Datsun       |GO Plus                |4.26       | 7 Lakh    |4.26              |7.0               |
+|4.23 - 5.09 Crore      |Ferrari      |GTC4 Lusso             |4.23       | 5.09 Crore|4.23              |509.0             |
+|3.18 - 8.55 Lakh       |Renault      |Kwid                   |3.18       | 8.55 Lakh |3.18              |8.55              |
+|67 - 81.9 Lakh         |BMW          |Z4                     |67         | 81.9 Lakh |67.0              |81.9              |
+|2.07 Crore             |Audi         |RS Q8                  |2.07 Crore |2.07 Crore |206.99999999999997|206.99999999999997|
+|55.67 Lakh             |Jaguar       |XF                     |55.67 Lakh |55.67 Lakh |55.67             |55.67             |
+|2.18 Crore             |BMW          |M8                     |2.18 Crore |2.18 Crore |218.00000000000003|218.00000000000003|
+|2.25 Crore             |Maserati     |GranTurismo            |2.25 Crore |2.25 Crore |225.0             |225.0             |
+|93 Lakh - 1.66 Crore   |BMW          |X7                     |93 Lakh    | 1.66 Crore|93.0              |166.0             |
+|2.48 Crore             |Mercedes Benz|AMG GT                 |2.48 Crore |2.48 Crore |248.0             |248.0             |
+|5.59 - 9.9 Lakh        |Nissan       |Magnite                |5.59       | 9.9 Lakh  |5.59              |9.9               |
+|40.59 Lakh             |Toyota       |Camry                  |40.59 Lakh |40.59 Lakh |40.59             |40.59             |
+|5.29 - 7.82 Lakh       |Renault      |Triber                 |5.29       | 7.82 Lakh |5.29              |7.82              |
+|67.9 - 77.9 Lakh       |BMW          |6 Series GT            |67.9       | 77.9 Lakh |67.9              |77.9              |
+|16.99 - 28.29 Lakh     |Jeep         |Compass                |16.99      | 28.29 Lakh|16.99             |28.29             |
+|1.32 - 1.98 Crore      |Porsche      |Cayenne Coupe          |1.32       | 1.98 Crore|1.32              |198.0             |
+|28.73 - 31.73 Lakh     |Mahindra     |Alturas G4             |28.73      | 31.73 Lakh|28.73             |31.73             |
+|29.98 - 36.08 Lakh     |MG           |Gloster                |29.98      | 36.08 Lakh|29.98             |36.08             |
+|3.1 Crore              |Lamborghini  |Urus                   |3.1 Crore  |3.1 Crore  |310.0             |310.0             |
+|2.1 - 2.16 Crore       |Lexus        |LC 500h                |2.1        | 2.16 Crore|2.1               |216.0             |
+|79.93 Lakh - 1.39 Crore|Mercedes Benz|C Coupe                |79.93 Lakh | 1.39 Crore|79.93             |139.0             |
+|59.9 Lakh              |Volvo        |XC60                   |59.9 Lakh  |59.9 Lakh  |59.9              |59.9              |
+|7.63 - 9.87 Lakh       |Honda        |Jazz                   |7.63       | 9.87 Lakh |7.63              |9.87              |
+|81.22 Lakh             |Mercedes Benz|AMG GLC 43 Coupe       |81.22 Lakh |81.22 Lakh |81.22             |81.22             |
+|77.25 - 94.22 Lakh     |Mercedes Benz|GLE                    |77.25      | 94.22 Lakh|77.25             |94.22             |
+|86.39 Lakh             |Mercedes Benz|CLS                    |86.39 Lakh |86.39 Lakh |86.39             |86.39             |
+|53.9 - 57.9 Lakh       |Jeep         |Wrangler               |53.9       | 57.9 Lakh |53.9              |57.9              |
++-----------------------+-------------+-----------------------+-----------+-----------+------------------+------------------+
+
++-------------+-----------------------+--------------------+
+|Brand        |Model                  |LowestPrice_in_lakhs|
++-------------+-----------------------+--------------------+
+|Audi         |A4                     |42.34               |
+|Audi         |A6                     |55.86               |
+|Audi         |A8 L                   |158.0               |
+|Audi         |Q2                     |34.99               |
+|Audi         |Q8                     |98.98               |
+|Audi         |RS Q8                  |206.99999999999997  |
+|Audi         |RS7 Sportback          |194.0               |
+|Audi         |S5 Sportback           |79.06               |
+|BMW          |2 Series Gran Coupe    |37.9                |
+|BMW          |3 Series               |42.6                |
+|BMW          |3 Series Gran Limousine|51.5                |
+|BMW          |5 Series               |56.0                |
+|BMW          |6 Series GT            |67.9                |
+|BMW          |7 Series               |1.38                |
+|BMW          |8 Series               |1.33                |
+|BMW          |M2                     |85.0                |
+|BMW          |M5                     |155.0               |
+|BMW          |M8                     |218.00000000000003  |
+|BMW          |X1                     |37.2                |
+|BMW          |X3                     |56.5                |
+|BMW          |X3 M                   |99.9                |
+|BMW          |X4                     |62.4                |
+|BMW          |X5                     |75.5                |
+|BMW          |X5 M                   |195.0               |
+|BMW          |X6                     |96.9                |
+|BMW          |X7                     |93.0                |
+|BMW          |Z4                     |67.0                |
+|Bentley      |Bentayga               |409.99999999999994  |
+|Citroen      |C5 Aircross            |29.9                |
+|Datsun       |GO Plus                |4.26                |
+|Datsun       |Go                     |4.03                |
+|Datsun       |redi-GO                |3.84                |
+|Ferrari      |812                    |520.0               |
+|Ferrari      |F8 Tributo             |401.99999999999994  |
+|Ferrari      |GTC4 Lusso             |4.23                |
+|Ferrari      |Portofino              |350.0               |
+|Honda        |All New City           |11.02               |
+|Honda        |Amaze                  |6.24                |
+|Honda        |City                   |9.3                 |
+|Honda        |Jazz                   |7.63                |
+|Honda        |WR-V                   |8.7                 |
+|Hyundai      |Aura                   |5.92                |
+|Hyundai      |Creta                  |10.0                |
+|Hyundai      |Elantra                |17.83               |
+|Hyundai      |Grand i10 Nios         |5.19                |
+|Hyundai      |Kona Electric          |24.15               |
+|Hyundai      |Santro                 |4.67                |
+|Hyundai      |Tucson                 |22.55               |
+|Hyundai      |Venue                  |6.87                |
+|Hyundai      |Verna                  |9.11                |
+|Hyundai      |i20                    |6.8                 |
+|Jaguar       |F TYPE                 |95.12               |
+|Jaguar       |F-Pace                 |66.07               |
+|Jaguar       |I-Pace                 |1.06                |
+|Jaguar       |XE                     |46.64               |
+|Jaguar       |XF                     |55.67               |
+|Jeep         |Compass                |16.99               |
+|Jeep         |Wrangler               |53.9                |
+|Kia          |Carnival               |24.95               |
+|Kia          |Seltos                 |9.89                |
+|Kia          |Sonet                  |6.79                |
+|Lamborghini  |Huracan                |3.22                |
+|Lamborghini  |Urus                   |310.0               |
+|Lexus        |ES                     |56.55               |
+|Lexus        |LC 500h                |2.1                 |
+|Lexus        |LS                     |1.91                |
+|Lexus        |LX                     |233.0               |
+|Lexus        |NX                     |58.2                |
+|Lexus        |RX                     |104.0               |
+|MG           |Gloster                |29.98               |
+|MG           |Hector                 |13.18               |
+|MG           |Hector Plus            |13.63               |
+|MG           |ZS EV                  |21.0                |
+|MINI Cooper  |Clubman                |41.9                |
+|MINI Cooper  |Cooper Convertible     |40.01               |
+|MINI Cooper  |Countryman             |39.5                |
+|MINI Cooper  |S                      |35.06               |
+|Mahindra     |Alturas G4             |28.73               |
+|Mahindra     |Bolero                 |8.12                |
+|Mahindra     |KUV100 NXT             |5.87                |
+|Mahindra     |Marazzo                |11.64               |
+|Mahindra     |Scorpio                |11.98               |
+|Mahindra     |Thar                   |10.0                |
+|Mahindra     |XUV300                 |7.95                |
+|Mahindra     |XUV500                 |13.8                |
+|Maserati     |Ghibli                 |1.15                |
+|Maserati     |GranCabrio             |268.0               |
+|Maserati     |GranTurismo            |225.0               |
+|Maserati     |Levante                |145.0               |
+|Maserati     |Quattroporte           |1.64                |
+|Mercedes Benz|A-Class Limousine      |39.9                |
+|Mercedes Benz|AMG GLC 43 Coupe       |81.22               |
+|Mercedes Benz|AMG GLE Coupe          |127.0               |
+|Mercedes Benz|AMG GT                 |248.0               |
+|Mercedes Benz|AMG GT 4-Door Coupe    |242.0               |
+|Mercedes Benz|C Class                |49.41               |
+|Mercedes Benz|C Coupe                |79.93               |
+|Mercedes Benz|CLS                    |86.39               |
+|Mercedes Benz|E Class                |63.6                |
+|Mercedes Benz|E-Class All-Terrain    |77.25               |
+|Mercedes Benz|EQC                    |104.0               |
+|Mercedes Benz|G Class                |1.62                |
+|Mercedes Benz|GLC Class              |57.36               |
+|Mercedes Benz|GLC Coupe              |66.66               |
+|Mercedes Benz|GLE                    |77.25               |
+|Mercedes Benz|GLS                    |105.0               |
+|Mercedes Benz|S Class                |1.42                |
+|Mercedes Benz|V-Class                |71.1                |
+|Nissan       |GT-R                   |212.0               |
+|Nissan       |Kicks                  |9.5                 |
+|Nissan       |Magnite                |5.59                |
+|Porsche      |718                    |85.46               |
+|Porsche      |911                    |1.64                |
+|Porsche      |Cayenne                |1.2                 |
+|Porsche      |Cayenne Coupe          |1.32                |
+|Porsche      |Macan                  |69.98               |
+|Porsche      |Panamera               |1.44                |
+|Renault      |Duster                 |9.73                |
+|Renault      |Kiger                  |5.45                |
+|Renault      |Kwid                   |3.18                |
+|Renault      |Triber                 |5.29                |
+|Rolls Royce  |Cullinan               |695.0               |
+|Rolls Royce  |Dawn                   |592.0               |
+|Rolls Royce  |Phantom VIII           |950.0               |
+|Rolls Royce  |Wraith                 |500.0               |
+|Tata         |Altroz                 |5.7                 |
+|Tata         |Harrier                |14.0                |
+|Tata         |Nexon                  |7.1                 |
+|Tata         |Nexon EV               |13.99               |
+|Tata         |Safari                 |14.69               |
+|Tata         |Tiago                  |4.86                |
+|Tata         |Tigor                  |5.5                 |
+|Tata         |Tigor EV               |10.51               |
+|Toyota       |Camry                  |40.59               |
+|Toyota       |Fortuner               |30.34               |
+|Toyota       |Glanza                 |7.18                |
+|Toyota       |Innova Crysta          |16.52               |
+|Toyota       |Urban Cruiser          |8.5                 |
+|Toyota       |Vellfire               |87.0                |
+|Toyota       |Yaris                  |9.16                |
+|Volkswagen   |Polo                   |6.17                |
+|Volkswagen   |T-Roc                  |21.35               |
+|Volkswagen   |Tiguan AllSpace        |34.2                |
+|Volkswagen   |Vento                  |9.14                |
+|Volvo        |S60                    |45.9                |
+|Volvo        |S90                    |59.0                |
+|Volvo        |V90 Cross Country      |65.41               |
+|Volvo        |XC40                   |39.9                |
+|Volvo        |XC60                   |59.9                |
+|Volvo        |XC90                   |80.99               |
++-------------+-----------------------+--------------------+
+
+
+
+
