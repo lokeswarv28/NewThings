@@ -351,3 +351,63 @@ WHERE
  
     AND tf.SubmittedTime = stg.SubmittedTime) order by SubmittedTime desc;
 
+
+=================================================== Query which is going to Run with in 1-2 min =====================================================
+
+WITH TransformedUpdates AS (
+    SELECT
+        stg.SubmittedTime,
+      Replace( Replace (Replace( Replace (Replace( Replace( Replace( Replace (Replace (Replace(Replace(Replace(Replace(REPLACE(REPLACE(REPLACE(REPLACE(
+    SUBSTRING(
+        stg.Updates,
+        CHARINDEX('Update', stg.Updates) + LEN('Update') + 1,
+        CASE
+            WHEN CHARINDEX('Service Health RAG', stg.Updates) > 0
+            THEN CHARINDEX('Service Health RAG', stg.Updates) - CHARINDEX('Update', stg.Updates) - LEN('Update') - 1
+            ELSE LEN(stg.Updates)
+        END
+    ), '<div>', ''), '</div>', ''), '<br>', ''), '&nbsp;', ''), '<ul>', ' '), '</li>', ''), '</ul>',''),'<li style="list-style-type: disc">', ' '),'<ul style="list-style-type: circle">', ' ' ), '<li style="">', ' '), '<ol>', ' '), '<li>', ' '), '<span>', ' '), '</span>', ' '), '<b>', ''), '</b>', ''), '</ol>', '')
+ AS ServiceValue,
+        stg.Updates AS UpdatesRichText,
+        dd.Pk_DateKey AS Fk_DateKey,
+        dp.Pk_ProjectId AS Fk_ProjectId,
+        de.Pk_EmployeeId AS Fk_EmployeesId,
+        dv.Pk_EmployeeId AS Fk_ViewersID,
+        ds.Pk_ServiceId AS Fk_ServiceKey
+    FROM
+        DMA.StgReports stg
+    JOIN DMA.DimDate dd ON CONVERT(DATE, stg.SubmittedTime) = dd.Date
+    JOIN DMA.DimProject dp ON REPLACE(REPLACE(REPLACE(REPLACE(SUBSTRING(stg.Updates, 1, CHARINDEX('Update', stg.Updates) - 3), 'Service', ''), CHAR(13), ''), CHAR(10), ''), CHAR(9), '') = dp.ProjectName
+    JOIN DMA.DimEmployee de ON stg.EmployeeEmail = de.EmployeeEmail 
+    JOIN DMA.DimEmployee dv ON stg.ViewEmail = dv.EmployeeEmail 
+    JOIN DMA.DimRag ds ON (
+        CASE 
+            WHEN CHARINDEX('Service Health RAG', stg.Updates) > 0 THEN SUBSTRING(stg.Updates, CHARINDEX('Service Health RAG', stg.Updates) + LEN('Service Health RAG') + 1, LEN(stg.Updates))
+            ELSE 'unknown'
+        END
+    ) = ds.RagName
+    WHERE
+        stg.Updates LIKE 'Service%'
+)
+INSERT INTO dma.FactReports (Updates, SubmittedTime, UpdatesRichText, Fk_DateKey, Fk_ProjectId, Fk_EmployeesId, Fk_ViewersID, Fk_ServiceKey)
+SELECT DISTINCT
+    ServiceValue,
+    SubmittedTime,
+    UpdatesRichText,
+    Fk_DateKey,
+    Fk_ProjectId,
+    Fk_EmployeesId,
+    Fk_ViewersID,
+    Fk_ServiceKey
+FROM
+    TransformedUpdates tu
+WHERE
+    NOT EXISTS (
+        SELECT 1
+        FROM dma.FactReports tf
+        WHERE tf.Updates = tu.ServiceValue
+        AND tf.SubmittedTime = tu.SubmittedTime
+    )
+ORDER BY
+    SubmittedTime DESC;
+
