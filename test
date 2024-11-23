@@ -1,0 +1,32 @@
+def fn_read_write_file(file_name, dest_filename):
+    try:
+        base_path = 'abfss://xyenta-dev-data@adlsxyentadevuks92.dfs.core.windows.net/'
+ 
+        folders = dbutils.fs.ls(base_path)
+ 
+        folder_exists = [i.path.split('/')[-1] for i in folders]
+ 
+        if file_name not in folder_exists:
+            raise ValueError(f'{file_name} is not folder')
+ 
+        print(f"trying to read the {file_name}")    
+        df = spark.read.format('csv').option('header', True).option('sep', '\t').option('inferSchema', True).load(f'{base_path}/{file_name}')
+        print("reading completed")
+ 
+        # df = df.repartition(30)
+ 
+        # print(df.rdd.getNumPartitions())
+ 
+        # df.select(spark_partition_id().alias('part_id')).groupBy('part_id').count().show()
+ 
+        # print("repartition completed")
+ 
+        df = df.select([when(col(c) == r'\N', 'NA').otherwise(col(c)).alias(c) for c in df.columns])
+ 
+        df.repartition(30).write.format('csv').option('Header', True).save(f'/mnt/genericGold/{dest_filename}')
+        # df.repartition(30).write.format('parquet').option('Header', True).save(f'/mnt/genericGold/{dest_filename}')
+        print(f"data written to the destination{dest_filename}")
+        return df
+ 
+    except Exception as e:
+        raise e
