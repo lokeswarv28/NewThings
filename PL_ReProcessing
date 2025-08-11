@@ -1,0 +1,273 @@
+{
+    "name": "PL_RePorcessingFiles_Group",
+    "properties": {
+        "description": "get the list of files under the group from the PL_GetListOfGroup",
+        "activities": [
+            {
+                "name": "GetMetadata_Of_Tables",
+                "description": "get the list of files outside the particular group ",
+                "type": "GetMetadata",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "dataset": {
+                        "referenceName": "DS_ADLS_Gen2_ListOfFiles",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "groupname": {
+                                "value": "@pipeline().parameters.p_str_datagroup",
+                                "type": "Expression"
+                            }
+                        }
+                    },
+                    "fieldList": [
+                        "childItems",
+                        "exists"
+                    ],
+                    "storeSettings": {
+                        "type": "AzureBlobFSReadSettings",
+                        "recursive": true,
+                        "enablePartitionDiscovery": false
+                    },
+                    "formatSettings": {
+                        "type": "DelimitedTextReadSettings"
+                    }
+                }
+            },
+            {
+                "name": "ITCR_Filter_only_Files",
+                "description": "filter the files based on the file type is a csv.",
+                "type": "Filter",
+                "dependsOn": [
+                    {
+                        "activity": "GetMetadata_Of_Tables",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "items": {
+                        "value": "@activity('GetMetadata_Of_Tables').output.childItems",
+                        "type": "Expression"
+                    },
+                    "condition": {
+                        "value": "@if(\n    greaterOrEquals(lastIndexOf(item().name, '_'), 0),\n    and(\n        equals(\n            substring(item().name, 0, lastIndexOf(item().name, '_')),\n            pipeline().parameters.p_str_SourceNames\n        ),\n        equals(item().type, 'File')\n    ),\n    false\n)",
+                        "type": "Expression"
+                    }
+                }
+            },
+            {
+                "name": "ACT_ITRC_Switch_DataGroup",
+                "type": "Switch",
+                "dependsOn": [
+                    {
+                        "activity": "ITCR_Filter_only_Files",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "on": {
+                        "value": "@toLower(pipeline().parameters.p_str_dataGroup)",
+                        "type": "Expression"
+                    },
+                    "cases": [
+                        {
+                            "value": "pulse",
+                            "activities": [
+                                {
+                                    "name": "Gen_Set_TheSnapshotDateValue",
+                                    "type": "SetVariable",
+                                    "dependsOn": [],
+                                    "policy": {
+                                        "secureOutput": false,
+                                        "secureInput": false
+                                    },
+                                    "userProperties": [],
+                                    "typeProperties": {
+                                        "variableName": "var_snapdate",
+                                        "value": {
+                                            "value": "@if(\n    greater(length(activity('ITCR_Filter_only_Files').output.value), 0), \n    formatDateTime(\n        addDays(\n            concat(\n                substring(activity('ITCR_Filter_only_Files').output.value[0].name, add(lastIndexOf(activity('ITCR_Filter_only_Files').output.value[0].name, '_'), 5), 4), \n                '-', \n                substring(activity('ITCR_Filter_only_Files').output.value[0].name, add(lastIndexOf(activity('ITCR_Filter_only_Files').output.value[0].name, '_'), 3), 2), \n                '-',  \n                substring(activity('ITCR_Filter_only_Files').output.value[0].name, add(lastIndexOf(activity('ITCR_Filter_only_Files').output.value[0].name, '_'), 1), 2), \n                'T00:00:00'\n            ), \n            -1\n        ), \n        'yyyyMMdd'\n    ), \n    'N/A'\n)\n",
+                                            "type": "Expression"
+                                        }
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "value": "xplan",
+                            "activities": [
+                                {
+                                    "name": "Gen_Set_SnapshotDate_forXPlan",
+                                    "type": "SetVariable",
+                                    "dependsOn": [],
+                                    "policy": {
+                                        "secureOutput": false,
+                                        "secureInput": false
+                                    },
+                                    "userProperties": [],
+                                    "typeProperties": {
+                                        "variableName": "var_snapdate",
+                                        "value": {
+                                            "value": "@if(greater(length(activity('ITCR_Filter_only_Files').output.value), 0), \n    formatDateTime( \n        addDays(\n            formatDateTime(\n                concat(\n                    substring(activity('ITCR_Filter_only_Files').output.value[0].name, add(lastIndexOf(activity('ITCR_Filter_only_Files').output.value[0].name, '_'), 1), 4 ),\n                    '-', \n                    substring(activity('ITCR_Filter_only_Files').output.value[0].name, add(lastIndexOf(activity('ITCR_Filter_only_Files').output.value[0].name, '_'), 5), 2 ),\n                    '-',  \n                    substring(activity('ITCR_Filter_only_Files').output.value[0].name, add(lastIndexOf(activity('ITCR_Filter_only_Files').output.value[0].name, '_'), 7), 2 ), \n                    'T00:00:00Z'\n                ), \n                'yyyy-MM-ddTHH:mm:ssZ'\n            ), \n            -1\n        ), \n        'yyyyMMdd'\n    ), \n    'N/A'\n)\n\n",
+                                            "type": "Expression"
+                                        }
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "value": "xplandelta",
+                            "activities": [
+                                {
+                                    "name": "Gen_Set_SnapshotDate_forXPlanDelta",
+                                    "description": "for XplanDelta",
+                                    "type": "SetVariable",
+                                    "dependsOn": [],
+                                    "policy": {
+                                        "secureOutput": false,
+                                        "secureInput": false
+                                    },
+                                    "userProperties": [],
+                                    "typeProperties": {
+                                        "variableName": "var_snapdate",
+                                        "value": {
+                                            "value": "@if(greater(length(activity('ITCR_Filter_only_Files').output.value), 0), \n    formatDateTime( \n        addDays(\n            formatDateTime(\n                concat(\n                    substring(activity('ITCR_Filter_only_Files').output.value[0].name, add(lastIndexOf(activity('ITCR_Filter_only_Files').output.value[0].name, '_'), 1), 4 ),\n                    '-', \n                    substring(activity('ITCR_Filter_only_Files').output.value[0].name, add(lastIndexOf(activity('ITCR_Filter_only_Files').output.value[0].name, '_'), 5), 2 ),\n                    '-',  \n                    substring(activity('ITCR_Filter_only_Files').output.value[0].name, add(lastIndexOf(activity('ITCR_Filter_only_Files').output.value[0].name, '_'), 7), 2 ), \n                    'T00:00:00Z'\n                ), \n                'yyyy-MM-ddTHH:mm:ssZ'\n            ), \n            -1\n        ), \n        'yyyyMMdd'\n    ), \n    'N/A'\n)\n\n",
+                                            "type": "Expression"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            },
+            {
+                "name": "IF_SnapshotNone",
+                "description": "the value from the variable is None then don't update the Table",
+                "type": "IfCondition",
+                "dependsOn": [
+                    {
+                        "activity": "ACT_ITRC_Switch_DataGroup",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "expression": {
+                        "value": "@not(equals(variables('var_snapdate'),'N/A'))",
+                        "type": "Expression"
+                    },
+                    "ifFalseActivities": [
+                        {
+                            "name": "Wait_false_1",
+                            "type": "Wait",
+                            "dependsOn": [],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "waitTimeInSeconds": 1
+                            }
+                        }
+                    ],
+                    "ifTrueActivities": [
+                        {
+                            "name": "ACT_GEN_SPROC_InsertMissingSnapshot",
+                            "type": "SqlServerStoredProcedure",
+                            "dependsOn": [],
+                            "policy": {
+                                "timeout": "0.12:00:00",
+                                "retry": 0,
+                                "retryIntervalInSeconds": 30,
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "storedProcedureName": "ETL.usp_InsertMissingSnapshot",
+                                "storedProcedureParameters": {
+                                    "MissingSnapshotDateStr": {
+                                        "value": {
+                                            "value": "@variables('var_snapdate')",
+                                            "type": "Expression"
+                                        },
+                                        "type": "String"
+                                    }
+                                }
+                            },
+                            "linkedServiceName": {
+                                "referenceName": "LS_ASQL_Jhpdwh",
+                                "type": "LinkedServiceReference"
+                            }
+                        },
+                        {
+                            "name": "ACT_GEN_SPROC_GetMissingSnapshotAndInsert",
+                            "type": "SqlServerStoredProcedure",
+                            "dependsOn": [
+                                {
+                                    "activity": "ACT_GEN_SPROC_InsertMissingSnapshot",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            ],
+                            "policy": {
+                                "timeout": "0.12:00:00",
+                                "retry": 0,
+                                "retryIntervalInSeconds": 30,
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "storedProcedureName": "ETL.usp_GetMissingSnapshotAndInsert",
+                                "storedProcedureParameters": {
+                                    "MissingSnapshotDate": {
+                                        "value": {
+                                            "value": "@variables('var_snapdate')",
+                                            "type": "Expression"
+                                        },
+                                        "type": "String"
+                                    }
+                                }
+                            },
+                            "linkedServiceName": {
+                                "referenceName": "LS_ASQL_Jhpdwh",
+                                "type": "LinkedServiceReference"
+                            }
+                        }
+                    ]
+                }
+            }
+        ],
+        "parameters": {
+            "p_str_datagroup": {
+                "type": "string"
+            },
+            "p_str_SourceNames": {
+                "type": "String"
+            }
+        },
+        "variables": {
+            "var_snapdate": {
+                "type": "String"
+            }
+        },
+        "folder": {
+            "name": "Master"
+        },
+        "annotations": []
+    }
+}
