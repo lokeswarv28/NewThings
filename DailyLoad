@@ -1,0 +1,77 @@
+CREATE PROCEDURE [ETL].[USP_CreateDailyLoad]
+AS
+BEGIN
+	DECLARE @SnapshotDate date = convert(Date, dateadd(day, -1, getdate()) );
+	DECLARE @SnapshotDateStr varchar(50) = CONVERT(varchar(8), @SnapshotDate, 112);
+
+	DECLARE @FailedSnapshotDate NVARCHAR(20);
+
+	SELECT  @FailedSnapshotDate = min(SnapshotDate)
+    FROM [ETL].[DailyLoad]
+    WHERE Status = 'Failed'
+    
+    print @FailedSnapshotDate
+ 
+    IF @FailedSnapshotDate IS NOT NULL
+    BEGIN
+        
+ 
+        UPDATE [ETL].[DailyLoad]
+        SET Status = 'Queued',
+            UpdatedDateTime = GETDATE()
+        WHERE SnapshotDate >=@FailedSnapshotDate;
+    END
+    ELSE
+    BEGIN
+        PRINT 'No failed snapshot found.';
+    END
+ 
+    -- Step 1: Check if the snapshot is already marked as Successful
+    IF EXISTS (
+        SELECT 1 FROM [ETL].[DailyLoad]
+        WHERE SnapshotDate = @SnapshotDateStr AND Status = 'Successful'
+    )
+    BEGIN
+        PRINT 'Snapshot already marked Successful. Exiting...';
+        RETURN;
+    END
+ 
+    -- Step 2: Check if failed or running snapshot exists for this date, update to Queued
+    IF EXISTS (
+        SELECT 1 FROM [ETL].[DailyLoad]
+        WHERE SnapshotDate = @SnapshotDateStr AND Status IN ('Failed', 'Running')
+    )
+    BEGIN
+        PRINT 'Snapshot exists with Failed or Running status. Updating to Queued...';
+        UPDATE [ETL].[DailyLoad]
+        SET Status = 'Queued',
+            UpdatedDateTime = GETDATE(),
+            StartDateTime = NULL,
+            EndDateTime = NULL
+        WHERE SnapshotDate = @SnapshotDateStr
+          AND Status IN ('Failed', 'Running');
+    END
+    ELSE IF NOT EXISTS (
+        SELECT 1 FROM [ETL].[DailyLoad]
+        WHERE SnapshotDate = @SnapshotDateStr
+    )
+    BEGIN
+        PRINT 'No snapshot exists. Inserting a new row for SnapshotDate: ' + CAST(@SnapshotDateStr AS VARCHAR);
+        INSERT INTO [ETL].[DailyLoad] (
+            SnapshotDate, CreatedDateTime, UpdatedDateTime, Status
+        )
+        VALUES (
+            @SnapshotDateStr, GETDATE(), GETDATE(), 'Queued'
+        );
+    END
+    ELSE
+    BEGIN
+        PRINT 'Snapshot already exists in Queued or other status. No action taken.';
+    END
+ 
+    PRINT 'Returning all Queued snapshot records...';
+    SELECT SnapshotDate, Status
+    FROM [ETL].[DailyLoad]
+    WHERE Status = 'Queued' ORDER BY SnapshotDate ASC;
+
+END;
