@@ -1,0 +1,101 @@
+CREATE PROCEDURE [ETL].[USP_CreateDataGroupLog] 
+    @dt_snapshotDate NVARCHAR(10),
+    @str_Layer NVARCHAR(100)
+AS 
+BEGIN 
+    SET NOCOUNT ON;
+
+    -- Step 1: Get the Daily Load ID for the provided snapshot date
+    DECLARE @DailyLoadID INT;
+	DECLARE @Status nvarchar(20);
+
+	SELECT 
+	@DailyLoadID = [PK_DailyLoadID],
+	@status = [Status]
+    FROM [ETL].[DailyLoad] 
+    WHERE [SnapshotDate] = @dt_snapshotDate
+
+    --SET @DailyLoadID = (
+    --    SELECT [PK_DailyLoadID] 
+    --    FROM [ETL].[DailyLoad] 
+    --    WHERE [SnapshotDate] = @dt_snapshotDate
+    --);
+
+    -- Ensure a valid DailyLoadID is available
+    IF @DailyLoadID IS NULL
+    BEGIN
+        RAISERROR('No DailyLoadID found for the given SnapshotDate.', 16, 1);
+        RETURN;
+    END
+
+	-- DailyLoad Status is Failed for Any Snapshot , we need to update DataGroup and DataTableLoadLog status to Queued
+	
+	IF @Status In ('Failed', 'Running')
+	BEGIN
+		
+			Update ETL.DataGroupLoadLog
+			SET [Status] = 'Queued'
+			FROM ETL.DataGroupLoadLog dgl
+			JOIN ETL.DailyLoad dl 
+			ON dl.PK_DailyLoadID = dgl.FK_DailyLoadID 
+			JOIN Metadata.DataGroup dg 
+			ON dg.PK_GroupID = dgl.FK_GroupID
+			WHERE dl.SnapshotDate =  @dt_snapshotDate and dg.Layer = @str_Layer
+
+			Update ETL.DataTableLoadLog
+			SET [Status] = 'Queued'
+			FROM ETL.DataTableLoadLog dtl
+			JOIN ETL.DataGroupLoadLog dgl
+			ON dtl.FK_GroupLoadLogID = dgl.PK_GroupLoadLogID
+			JOIN ETL.DailyLoad dl 
+			ON dl.PK_DailyLoadID = dgl.FK_DailyLoadID 
+			JOIN Metadata.DataGroup dg 
+			ON dg.PK_GroupID = dgl.FK_GroupID
+			WHERE dl.SnapshotDate =  @dt_snapshotDate and dg.Layer = @str_Layer
+
+	END;
+
+    -- Step 2: Update existing records with 'Failed' or 'Running' status to 'Queued'
+    UPDATE dgl
+    SET dgl.[Status] = 'Queued', 
+        dgl.[UpdatedDateTime] = GETDATE(),
+		dgl.StartDateTime = NULL,
+		dgl.EndDateTime = NULL
+    FROM [ETL].[DataGroupLoadLog] dgl
+    INNER JOIN [Metadata].[DataGroup] dg ON dg.[PK_GroupID] = dgl.[FK_GroupID]
+    WHERE dgl.[FK_DailyLoadID] = @DailyLoadID
+      AND dgl.[Status] IN ('Failed', 'Running')
+      AND dg.[Layer] = @str_Layer
+      AND dg.[IsActive] = 1;
+
+    -- Step 3: Insert new records only if no entry with 'Running', 'Failed', or 'Successful' status exists
+    INSERT INTO [ETL].[DataGroupLoadLog] (
+        [FK_DailyLoadID], [FK_GroupID], [CreateDateTime], 
+        [UpdatedDateTime]
+		--, [StartDatetime]
+		, [Status]
+    )
+    SELECT 
+        @DailyLoadID AS [FK_DailyLoadID],
+        dg.[PK_GroupID] AS [FK_GroupID],
+        GETDATE() AS [CreateDateTime],
+        GETDATE() AS [UpdatedDateTime],
+      --  GETDATE() AS [StartDatetime],
+        'Queued' AS [Status]
+    FROM [Metadata].[DataGroup] dg
+    LEFT JOIN [ETL].[DataGroupLoadLog] dgl 
+        ON dgl.[FK_GroupID] = dg.[PK_GroupID] 
+       AND dgl.[FK_DailyLoadID] = @DailyLoadID
+    WHERE dg.[IsActive] = 1 
+      AND dg.[Layer] = @str_Layer
+      AND (dgl.[Status] IS NULL);
+
+    -- Step 4: Return the list of queued data groups
+    SELECT dg.[GroupName], @str_Layer AS [Layer]
+    FROM [ETL].[DataGroupLoadLog] dgl
+    INNER JOIN [Metadata].[DataGroup] dg ON dgl.[FK_GroupID] = dg.[PK_GroupID]
+    WHERE dgl.[Status] = 'Queued'
+      AND dgl.[FK_DailyLoadID] = @DailyLoadID AND dg.Layer = @str_Layer;
+
+    SET NOCOUNT OFF;
+END;
