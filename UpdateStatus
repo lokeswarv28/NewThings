@@ -1,0 +1,123 @@
+CREATE PROCEDURE [ETL].[USP_UpdateLogStatus]
+    @str_LogObject NVARCHAR(100),
+    @dt_SnapshotDate NVARCHAR(10),
+    @str_DataGroupName NVARCHAR(100) = NULL,
+    @str_Layer NVARCHAR(100) = NULL,
+    @str_DataTableName NVARCHAR(100) = NULL,
+    @new_Status NVARCHAR(100)
+
+AS
+BEGIN
+    -- Check if @str_LogObject is one of the allowed Values
+    IF @str_LogObject NOT IN ('Daily', 'DataGroup', 'DataTable')
+    BEGIN
+        RAISERROR ('Invalid Log Object: use ''Daily'', ''DataGroup'' or ''DataTable''', 16, 1);
+        RETURN;
+    END
+
+    -- Update Daily Load Log
+    IF @str_LogObject = 'Daily'
+    BEGIN
+        IF @dt_SnapshotDate IS NULL
+        BEGIN
+            RAISERROR('SnapshotDate is required for Daily Log', 16, 1);
+            RETURN;
+        END
+
+        UPDATE [ETL].[DailyLoad]
+        SET [Status] = @new_Status
+			,[UpdatedDateTime] = GETDATE()
+			,[StartDateTime] = ( CASE WHEN @new_Status IN ('Running') 
+											THEN GETDATE()
+									 ELSE StartDateTime
+								  END
+								)
+			,[EndDateTime] =	(	CASE WHEN @new_Status IN ('Successful','Failed') 
+												THEN GETDATE()
+										 ELSE EndDateTime
+									END 
+								)
+        WHERE [SnapshotDate] = @dt_SnapshotDate;
+    END
+
+    -- Update DataGroup Load Log
+    IF @str_LogObject = 'DataGroup'
+    BEGIN
+        IF @dt_SnapshotDate IS NULL OR @str_DataGroupName IS NULL OR @str_Layer IS NULL
+        BEGIN
+            RAISERROR('SnapshotDate, DataGroupName, and Layer are required for Data Group Log', 16, 1);
+            RETURN;
+        END
+
+        UPDATE [ETL].[DataGroupLoadLog]
+        SET [Status] = @new_Status
+			,[UpdatedDateTime] = GETDATE()
+			,[StartDateTime] = ( CASE WHEN @new_Status IN ('Running') 
+											THEN GETDATE()
+									 ELSE StartDateTime
+								  END
+								)
+			,[EndDateTime] =	(	CASE WHEN @new_Status IN ('Successful','Failed') 
+												THEN GETDATE()
+										 ELSE EndDateTime
+									END 
+								)
+        WHERE [FK_DailyLoadID] = (
+            SELECT TOP 1 [PK_DailyLoadID] FROM [ETL].[DailyLoad] WHERE [SnapshotDate] = @dt_SnapshotDate
+        )
+        AND [FK_GroupID] = (
+            SELECT TOP 1 [PK_GroupID] FROM [Metadata].[DataGroup] WHERE [GroupName] = @str_DataGroupName AND [Layer] = @str_Layer
+        );
+    END
+
+    -- Update DataTable Load Log
+    IF @str_LogObject = 'DataTable'
+    BEGIN
+        IF @dt_SnapshotDate IS NULL OR @str_DataGroupName IS NULL OR @str_Layer IS NULL OR @str_DataTableName IS NULL
+        BEGIN
+            RAISERROR('SnapshotDate, DataGroupName, Layer, and DataTableName are required for Data Table Log', 16, 1);
+            RETURN;
+        END
+
+		
+
+		UPDATE [ETL].[DataTableLoadLog]
+        SET [Status] = @new_Status
+			,[UpdatedDateTime] = GETDATE()
+			,[StartDateTime] = ( CASE WHEN @new_Status IN ('Running') 
+											THEN GETDATE()
+									 ELSE StartDateTime
+								  END
+								)
+			,[EndDateTime] =	(	CASE WHEN @new_Status IN ('Successful','Failed') 
+												THEN GETDATE()
+										 ELSE EndDateTime
+									END 
+								)
+        WHERE [FK_GroupLoadLogID] = (
+										SELECT TOP 1 [PK_GroupLoadLogID] 
+										FROM [ETL].[DataGroupLoadLog]
+										WHERE [FK_DailyLoadID] = (	SELECT TOP 1 [PK_DailyLoadID] 
+																	FROM [ETL].[DailyLoad] 
+																	WHERE [SnapshotDate] = @dt_SnapshotDate
+																 )
+
+											AND  [FK_GroupID] = (SELECT TOP 1 [PK_GroupID] 
+																		FROM [Metadata].[DataGroup] 
+																		WHERE [GroupName] = @str_DataGroupName 
+																		AND [Layer] = @str_Layer
+																	 )
+            
+									)
+        AND [FK_TableID] = (
+										SELECT TOP 1 [PK_TableID] 
+										FROM [Metadata].[DataTable] 
+										WHERE [TableName] = @str_DataTableName
+												AND  [FK_GroupID] = (SELECT TOP 1 [PK_GroupID] 
+																		FROM [Metadata].[DataGroup] 
+																		WHERE [GroupName] = @str_DataGroupName 
+																		AND [Layer] = @str_Layer
+																	 )
+							);
+    END
+END;
