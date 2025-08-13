@@ -1,0 +1,70 @@
+
+CREATE PROCEDURE [ETL].[USP_CreateDataTableLoadLog] 
+    @dt_snapshotDate NVARCHAR(10),
+    @str_DataGroupName NVARCHAR(100),
+    @str_Layer NVARCHAR(100)
+AS
+BEGIN 
+    DECLARE @GroupLoadLogID INT;
+
+    -- Get the GroupLoadLog ID for the specified data group, snapshot date, and layer 
+    SELECT @GroupLoadLogID = [PK_GroupLoadLogID] 
+    FROM [ETL].[DataGroupLoadLog] dgl
+    JOIN [Metadata].[DataGroup] dg ON dgl.[FK_GroupID] = dg.[PK_GroupID]
+    WHERE dg.[GroupName] = @str_DataGroupName
+      AND dgl.[FK_DailyLoadID] = (SELECT [PK_DailyLoadID] 
+                                  FROM [ETL].[DailyLoad] 
+                                  WHERE [SnapshotDate] = @dt_snapshotDate)
+      AND dg.[Layer] = @str_Layer;
+
+    -- Update existing entries with 'Failed' or 'Running' status to 'Queued'
+    UPDATE  Dtl
+			SET			Dtl.[Status] = 'Queued'
+						,Dtl.[UpdatedDateTime] = GETDATE()
+						,Dtl.StartDateTime = NULL
+						,Dtl.EndDateTime = NULL
+	FROM [ETL].[DataTableLoadLog] DTL
+    WHERE Dtl.[FK_GroupLoadLogID] = @GroupLoadLogID
+      AND Dtl.[Status] IN ('Failed', 'Running')
+      AND Dtl.[FK_TableID] IN (
+          SELECT [PK_TableID] 
+          FROM [Metadata].[DataTable] dt
+          JOIN [Metadata].[DataGroup] dg ON dt.[FK_GroupID] = dg.[PK_GroupID]
+          WHERE dg.[GroupName] = @str_DataGroupName 
+            AND dg.[Layer] = @str_Layer
+            AND dt.[IsActive] = 1
+      );
+
+    -- Insert new records with 'Queued' status for active tables without an existing log entry for this GroupLoadLogID
+    INSERT INTO [ETL].[DataTableLoadLog] (
+        [FK_GroupLoadLogID], [FK_TableID], [CreateDateTime], 
+        [UpdatedDateTime]
+		--, [StartDateTime]
+		, [Status]
+    )
+    SELECT @GroupLoadLogID
+	, dt.[PK_TableID]
+	, GETDATE()
+	, GETDATE()
+	--, GETDATE()
+	, 'Queued'
+    FROM [Metadata].[DataTable] dt
+    JOIN [Metadata].[DataGroup] dg ON dt.[FK_GroupID] = dg.[PK_GroupID]
+    LEFT JOIN [ETL].[DataTableLoadLog] dtll 
+           ON dtll.[FK_TableID] = dt.[PK_TableID] 
+           AND dtll.[FK_GroupLoadLogID] = @GroupLoadLogID
+    WHERE dg.[GroupName] = @str_DataGroupName 
+      AND dg.[Layer] = @str_Layer
+      AND dt.[IsActive] = 1
+      AND dtll.[PK_TableLoadLogID] IS NULL  -- Ensures no record exists for this TableID and GroupLoadLogID
+      AND dtll.[Status] IS NULL;            
+
+    -- Return records with 'Queued' status for verification
+    SELECT dt.[TableName], @str_DataGroupName AS [DataGroupName], 
+           @str_Layer AS [Layer], @dt_snapshotDate AS [SnapshotDate]
+    FROM [ETL].[DataTableLoadLog] dtll
+    JOIN [Metadata].[DataTable] dt ON dtll.[FK_TableID] = dt.[PK_TableID]
+    WHERE dtll.[Status] = 'Queued'
+      AND dt.[IsActive] = 1
+      AND dtll.[FK_GroupLoadLogID] = @GroupLoadLogID;
+END;
