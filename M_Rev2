@@ -1,0 +1,155 @@
+-- Runtime Optimisation Settings
+SET spark.sql.adaptive.enabled = true;
+SET spark.sql.adaptive.coalescePartitions.enabled = true;
+SET spark.sql.shuffle.partitions = 2000;
+
+CREATE OR REPLACE TEMP TABLE M_REV AS
+
+WITH FT_BASE AS (
+    SELECT *
+    FROM UDWBASESECUREVIEW2.FINC_TRANS FT
+    WHERE FT.FTP_CD >= '2024'     -- Same business logic
+),
+
+-- 🔥 Pre-aggregate biggest table first (reduces shuffle explosion)
+TSA_AGG AS (
+    SELECT
+        UDW_FINC_TRANS_ID,
+        FTP_CD,
+        UDW_GL_TAG_SET_ID,
+        ONST_OFST_CD,
+        DSTRB_STS_CD,
+        INCUR_DT,
+        SUM(GL_AMT) AS GL_AMT
+    FROM UDWBASESECUREVIEW2.FINC_RVNU_TRANS_TAG_SET_ASSOC
+    WHERE GL_AMT <> 0
+    GROUP BY
+        UDW_FINC_TRANS_ID,
+        FTP_CD,
+        UDW_GL_TAG_SET_ID,
+        ONST_OFST_CD,
+        DSTRB_STS_CD,
+        INCUR_DT
+),
+
+-- Main Join Layer
+BASE_DATA AS (
+    SELECT
+        FT.FTP_CD,
+        FT.UDW_CUST_CONTR_ID,
+        FT.TRANS_TYP_CD,
+        FT.TRANS_ACTV_TYP_CD,
+        FT.FINC_TRANS_EVNT_TYP_CD,
+        COALESCE(FRT.FINC_FUND_ARNG_CD, FT.FUND_ARNG_CD) AS FUND_ARNG_CD,
+
+        -- Keep raw dates for grouping
+        FT.PROC_DT,
+        FT.FISC_DT,
+        FT.SCHED_BK_DT,
+        FT.TRANS_FST_SRVC_DT,
+
+        FT.ORIG_SRC_SYS_CD,
+        FT.SRC_SYS_CD,
+        FRT.RVNU_DATA_TYP_CD,
+        UFT.UCAS_TRANS_SRC_TYP_CD,
+        UFT.SUFX_CD,
+
+        TSA.ONST_OFST_CD,
+        TSA.DSTRB_STS_CD,
+        TSA.INCUR_DT,
+
+        FTTS.BU_VAL,
+        FTTS.ACCT_VAL,
+        FTTS.CUST_VAL,
+        SUBSTRING(FTTS.LOC_VAL, 1, 5) AS LOC_VAL,
+        FTTS.PRDCT_VAL,
+
+        M_CSTR.CUST_CONTR_NM,
+        M_CSTR.SRC_CUST_CONTR_ID,
+
+        TSA.GL_AMT
+
+    FROM FT_BASE FT
+
+    JOIN UDWBASESECUREVIEW2.FINC_RVNU_TRANS FRT
+        ON FT.UDW_FINC_TRANS_ID = FRT.UDW_FINC_TRANS_ID
+        AND FT.FTP_CD = FRT.FTP_CD
+
+    JOIN TSA_AGG TSA
+        ON TSA.UDW_FINC_TRANS_ID = FRT.UDW_FINC_TRANS_ID
+        AND TSA.FTP_CD = FRT.FTP_CD
+
+    JOIN UDWBASESECUREVIEW2.FINC_TRANS_TAG_SET FTTS
+        ON FTTS.UDW_GL_TAG_SET_ID = TSA.UDW_GL_TAG_SET_ID
+
+    LEFT JOIN UDWBASESECUREVIEW2.UCAS_FINC_TRANS UFT
+        ON UFT.UDW_FINC_TRANS_ID = FRT.UDW_FINC_TRANS_ID
+        AND UFT.FTP_CD = FRT.FTP_CD
+
+    -- ✅ Broadcast 2.3M row table
+    LEFT JOIN /*+ BROADCAST(M_CSTR) */ M_CSTR
+        ON FT.UDW_CUST_CONTR_ID = M_CSTR.UDW_CUST_CONTR_ID
+)
+
+-- Final Aggregation
+SELECT
+    FTP_CD,
+    UDW_CUST_CONTR_ID,
+    TRANS_TYP_CD,
+    TRANS_ACTV_TYP_CD,
+    FINC_TRANS_EVNT_TYP_CD,
+    FUND_ARNG_CD,
+
+    date_format(PROC_DT,'yyyyMM') AS PROC_MO,
+    date_format(FISC_DT,'yyyyMM') AS FISC_MO,
+    date_format(SCHED_BK_DT,'yyyyMM') AS SCHED_BK_MO,
+    date_format(TRANS_FST_SRVC_DT,'yyyyMM') AS SRVC_MO,
+
+    ORIG_SRC_SYS_CD,
+    SRC_SYS_CD,
+    RVNU_DATA_TYP_CD,
+    UCAS_TRANS_SRC_TYP_CD,
+    SUFX_CD,
+    ONST_OFST_CD,
+    DSTRB_STS_CD,
+
+    date_format(INCUR_DT,'yyyyMM') AS INCUR_MO,
+
+    BU_VAL,
+    ACCT_VAL,
+    CUST_VAL,
+    LOC_VAL,
+    PRDCT_VAL,
+    CUST_CONTR_NM,
+    SRC_CUST_CONTR_ID,
+
+    SUM(GL_AMT) AS GL_AMT
+
+FROM BASE_DATA
+
+GROUP BY
+    FTP_CD,
+    UDW_CUST_CONTR_ID,
+    TRANS_TYP_CD,
+    TRANS_ACTV_TYP_CD,
+    FINC_TRANS_EVNT_TYP_CD,
+    FUND_ARNG_CD,
+    PROC_DT,
+    FISC_DT,
+    SCHED_BK_DT,
+    TRANS_FST_SRVC_DT,
+    ORIG_SRC_SYS_CD,
+    SRC_SYS_CD,
+    RVNU_DATA_TYP_CD,
+    UCAS_TRANS_SRC_TYP_CD,
+    SUFX_CD,
+    ONST_OFST_CD,
+    DSTRB_STS_CD,
+    INCUR_DT,
+    BU_VAL,
+    ACCT_VAL,
+    CUST_VAL,
+    LOC_VAL,
+    PRDCT_VAL,
+    CUST_CONTR_NM,
+    SRC_CUST_CONTR_ID;
